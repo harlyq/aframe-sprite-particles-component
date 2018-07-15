@@ -37,11 +37,11 @@
           <a-text value="snowfall" mixin="label"></a-text>
         </a-entity>
         <a-entity position="0 4 0">
-          <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialSpeed: 2..4; radialAcceleration: -2; lifeTime: .5; size: 1,.2; particleSize: 25"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialVelocity: 2..4; radialAcceleration: -2; lifeTime: .5; size: 1,.2; particleSize: 25"></a-entity>
           <a-text value="fireworks" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-4 4 0">
-          <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialSpeed: 2..4; radialAcceleration: -2; lifeTime: .5; size: 1,.2; particleSize: 25; direction: backward"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialVelocity: 2..4; radialAcceleration: -2; lifeTime: .5; size: 1,.2; particleSize: 25; direction: backward"></a-entity>
           <a-text value="backwards fireworks" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-8 4 0">
@@ -61,11 +61,11 @@
           <a-text value="frames" mixin="label"></a-text>
         </a-entity>
         <a-entity position="0 8 0">
-          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 1000; spawnType: burst; radialSpeed: .3; lifeTime: 3; scale: .1,.5; color: violet"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 1000; spawnType: burst; radialVelocity: .3; lifeTime: 3; scale: .1,.5; color: violet"></a-entity>
           <a-text value="burst mode" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-4 8 0">
-          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 100; radialSpeed: 0.4; lifeTime: 3; angularVelocity: 0 0 60..0 0 180; frustumCulled: true"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 100; radialVelocity: 0.4; lifeTime: 3; angularVelocity: 0 0 60..0 0 180; frustumCulled: true"></a-entity>
           <a-text value="rotating" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-8 8 0">
@@ -74,7 +74,7 @@
         </a-entity>
         <a-entity position="-12 8 0">
           <a-sphere color="#040" segments-width="32" segments-height="32" radius="1"></a-sphere>
-          <a-entity sprite-particles="texture: assets/blob.png; color: green; spawnRate: 100; radialType: sphere; radialPosition: 1; radialSpeed: .5; radialAcceleration: -2; scale: .1..2"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; color: green; spawnRate: 100; radialType: sphere; radialPosition: 1; radialVelocity: .5; radialAcceleration: -2; scale: .1..2"></a-entity>
           <a-text value="green blob" mixin="label"></a-text>
         </a-entity>
         <a-entity position="4 8 0">
@@ -82,7 +82,7 @@
           <a-text value="acceleration" mixin="label"></a-text>
         </a-entity>
         <a-entity position="8 8 0">
-          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 100; lifeTime: .5; radialSpeed: 1; radialAcceleration: 2; scale: .5"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 100; lifeTime: .5; radialVelocity: 1; radialAcceleration: 2; scale: .5"></a-entity>
           <a-text value="sparkler" mixin="label"></a-text>
         </a-entity>
         <a-entity position="0 -4 0">

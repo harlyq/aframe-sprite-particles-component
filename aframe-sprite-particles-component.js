@@ -95,7 +95,7 @@
       acceleration: { default: "0 0 0" },
       radialType: { default: "circle", oneOf: ["circle", "sphere"], parse: toLowerCase },
       radialPosition: { default: "0" },
-      radialSpeed: { default: "0" },
+      radialVelocity: { default: "0" },
       radialAcceleration: { default: "0" },
       angularVelocity: { default: "0 0 0" },
       angularAcceleration: { default: "0 0 0" },
@@ -130,7 +130,7 @@
       this.useTransparent = false
       this.textureFrames = new Float32Array(4) // xy is TextureFrame, z is TextureCount, w is TextureLoop
       this.offset = new Float32Array(4*2).fill(0) // xyz is position, w is radialPosition
-      this.velocity = new Float32Array(4*2).fill(0) // xyz is velocity, w is radialSpeed
+      this.velocity = new Float32Array(4*2).fill(0) // xyz is velocity, w is radialVelocity
       this.acceleration = new Float32Array(4*2).fill(0) // xyz is acceleration, w is radialAcceleration
       this.angularVelocity = new Float32Array(4*2).fill(0) // xyz is angularVelocity, w is lifeTime
       this.angularAcceleration = new Float32Array(4*2).fill(0) // xyz is angularAcceleration
@@ -195,9 +195,9 @@
         boundsDirty = true
       }
 
-      if (data.velocity !== oldData.velocity || data.radialSpeed !== oldData.radialSpeed) {
+      if (data.velocity !== oldData.velocity || data.radialVelocity !== oldData.radialVelocity) {
         this.updateVec4XYZRange(data.velocity, "velocity")
-        this.updateVec4WRange(data.radialSpeed, [0], "velocity")
+        this.updateVec4WRange(data.radialVelocity, [0], "velocity")
         boundsDirty = true
       }
 
