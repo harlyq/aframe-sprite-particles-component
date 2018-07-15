@@ -1,6 +1,6 @@
 {
   "name": "aframe-sprite-particles-component",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "aframe particle system component using texture billboards",
   "main": "aframe-sprite-particles-component.js",
   "files": ["aframe-sprite-particles-component.js"],
@@ -10,8 +10,10 @@
   },
   "keywords": [
     "aframe",
-    "aframe-vr",
-    "aframe component"
+    "component",
+    "particle",
+    "particles",
+    "sprite"
   ],
   "author": "harlyq",
   "license": "MIT",

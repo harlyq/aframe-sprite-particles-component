@@ -15,7 +15,7 @@
   const USE_PERSPECTIVE_PARAM = 9 // [2].y
   const DIRECTION_PARAM = 10 // [2].x
 
-  const RANDOM_REPEAT_COUNT = 1048576; // random numbers will start repeating after this number of particles
+  const RANDOM_REPEAT_COUNT = 262144; // random numbers will start repeating after this number of particles
 
   const degToRad = THREE.Math.degToRad
 
@@ -24,7 +24,10 @@
 
   // Convert a vector range string into an array of elements. def defines the default elements for each vector
   const parseVecRange = (str, def) => {
-    let parts = str.split("..").map(a => a.trim().split(" ").map(b => b !== "" ? Number(b) : undefined))
+    let parts = str.split("..").map(a => a.trim().split(" ").map(b => {
+      const num = Number(b)
+      return isNaN(num) ? undefined : num
+    }))
     if (parts.length === 1) parts[1] = parts[0] // if there is no second part then copy the first part
     parts.length = 2
     return flattenDeep( parts.map(a => def.map((x,i) => typeof a[i] === "undefined" ? x : a[i])) )
@@ -112,7 +115,8 @@
       usePerspective: { default: true },
       seed: { type: "float", default: -1 },
       overTimeSlots: { type: "int", default: 5 },
-      frustumCulled: { default: false },
+      frustumCulled: { default: true },
+      editorObject: { default: true },
     },
     multiple: true,
     help: "https://github.com/harlyq/aframe-sprite-particles-component",
@@ -142,17 +146,15 @@
 
     remove() {
       if (this.mesh) {
-        if (this.relative === "world") {
-          this.el.sceneEl.removeObject3D(this.mesh.uniqueName)
-        } else {
-          this.el.removeObject3D(this.mesh.uniqueName)
-        }
+        this.parentEl.removeObject3D(this.mesh.name)
       } 
     },
 
     update(oldData) {
       const data = this.data
       
+      let boundsDirty = data.particleSize !== oldData.particleSize
+
       if (data.relative !== this.relative) {
         console.error("sprite-particles 'relative' cannot be changed at run-time")
       }
@@ -190,20 +192,24 @@
       if (data.position !== oldData.position || data.radialPosition !== oldData.radialPosition) {
         this.updateVec4XYZRange(data.position, "offset")
         this.updateVec4WRange(data.radialPosition, [0], "offset")
+        boundsDirty = true
       }
 
       if (data.velocity !== oldData.velocity || data.radialSpeed !== oldData.radialSpeed) {
         this.updateVec4XYZRange(data.velocity, "velocity")
         this.updateVec4WRange(data.radialSpeed, [0], "velocity")
+        boundsDirty = true
       }
 
       if (data.acceleration !== oldData.acceleration || data.radialAcceleration !== oldData.radialAcceleration) {
         this.updateVec4XYZRange(data.acceleration, "acceleration")
         this.updateVec4WRange(data.radialAcceleration, [0], "acceleration")
+        boundsDirty = true
       }
 
       if (data.rotation !== oldData.rotation || data.scale !== oldData.scale) {
         this.updateRotationScaleOverTime()
+        boundsDirty = true
       }
 
       if (data.color !== oldData.color || data.opacity !== oldData.opacity) {
@@ -239,6 +245,10 @@
       // create the mesh once all of the paramters have been setup
       if (!this.mesh) {
         this.createMesh()
+      }
+
+      if (boundsDirty) {
+        this.updateBounds() // call after createMesh()
       }
 
       // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
@@ -334,15 +344,21 @@
       }
 
       this.mesh = new THREE.Points(this.geometry, this.material)
-      this.mesh.uniqueName = "points" + uniqueID++
       this.mesh.frustumCulled = data.frustumCulled
 
-      if (this.relative === "world") {
-        this.el.sceneEl.setObject3D(this.mesh.uniqueName, this.mesh)
-      } else {
-        this.el.setObject3D(this.mesh.uniqueName, this.mesh)
+      this.parentEl = this.relative === "world" ? this.el.sceneEl : this.el
+      if (this.relative === "local") {
+        this.mesh.name = this.attrName
+      } else if (this.el.id) { // world relative with id
+        this.mesh.name = this.el.id + "_" + this.attrName
+      } else { // world relative, no id
+        this.parentEl.spriteParticleshUniqueID = (this.parentEl.spriteParticleshUniqueID || 0) + 1
+        this.mesh.name = this.attrName + (this.parentEl.spriteParticleshUniqueID > 1 ? this.parentEl.spriteParticleshUniqueID.toString() : "")
       }
+      // console.log(this.mesh.name)
 
+      this.material.name = this.mesh.name
+      this.parentEl.setObject3D(this.mesh.name, this.mesh)
     },
 
     updateColorOverTime() {
@@ -435,6 +451,72 @@
       return floatRange
     },
 
+    updateBounds() {
+      const data = this.data
+      const maxAge = Math.max(this.lifeTime[0], this.lifeTime[1])
+      const STRIDE = 4
+      let extent = [new Array(STRIDE), new Array(STRIDE)] // extent[0] = min values, extent[1] = max values
+
+      // Use offset, velocity and acceleration to determine the extents for the particles
+      for (let j = 0; j < 2; j++) { // index for extent
+        const compare = j === 0 ? Math.min: Math.max
+
+        for (let i = 0; i < STRIDE; i++) { // 0 = x, 1 = y, 2 = z, 3 = radial
+          const offset = compare(this.offset[i], this.offset[i + STRIDE])
+          const velocity = compare(this.velocity[i], this.velocity[i + STRIDE])
+          const acceleration = compare(this.acceleration[i], this.acceleration[i + STRIDE])
+  
+          // extent at time tmax
+          extent[j][i] = offset + (velocity + 0.5 * acceleration * maxAge) * maxAge
+  
+          // extent at time t0
+          extent[j][i] = compare(extent[j][i], offset)
+  
+          // extent at turning point
+          const turningPoint = -velocity/acceleration
+          if (turningPoint > 0 && turningPoint < maxAge) {
+            extent[j][i] = compare(extent[j][i], offset - 0.5*velocity*velocity/acceleration)
+          }
+        }
+      }
+
+      // apply the radial extents to the XYZ extents
+      const maxScale = Math.max(this.rotationScaleOverTime[3], this.rotationScaleOverTime[7])
+      const maxRadial = Math.max(Math.abs(extent[0][3]), Math.abs(extent[1][3])) + data.particleSize*0.00045*maxScale
+      extent[0][0] -= maxRadial
+      extent[0][1] -= maxRadial
+      extent[0][2] -= data.radialType === "sphere" ? maxRadial : 0
+      extent[1][0] += maxRadial
+      extent[1][1] += maxRadial
+      extent[1][2] += data.radialType === "sphere" ? maxRadial : 0
+
+      // discard the radial element
+      extent[0].length = 3
+      extent[0].length = 3
+
+      const maxR = Math.max(...extent[0].map(Math.abs), ...extent[1].map(Math.abs))
+      if (!this.geometry.boundingSphere) {
+        this.geometry.boundingSphere = new THREE.Sphere()
+      }
+      this.geometry.boundingSphere.radius = maxR
+
+      // this does not work correctly if there are multiple particles on an entity
+      if (data.editorObject) {
+        const existingMesh = this.el.getObject3D("mesh")
+
+        if (!existingMesh || existingMesh.isParticlesEditorObject) {
+          // Add a box3 that can be used to make the particle clickable in the inspector (does not work for world
+          // relative particles), and show a bounding box
+          // Provide some min extents 0.25, in case the particle system is very thin
+          let box3 = new THREE.Box3(new THREE.Vector3(...extent[0].map(x => Math.min(x,-0.25))), new THREE.Vector3(...extent[1].map(x => Math.max(x, 0.25))))
+          let box3Mesh = new THREE.Box3Helper(box3, 0xffff00)
+          box3Mesh.visible = false
+          box3Mesh.isParticlesEditorObject = true
+          this.el.setObject3D("mesh", box3Mesh) // the inspector puts a bounding box around the "mesh" object
+        }
+      }
+    },
+
     updateAttributes() {
       if (this.geometry) {
         const n = this.count
@@ -472,6 +554,8 @@
           let particlePosition = this.geometry.getAttribute("position")
           let particleQuaternion = this.geometry.getAttribute("quaternion")
           this.el.object3D.matrixWorld.decompose(position, quaternion, scale)
+
+          this.geometry.boundingSphere.center.copy(position)
 
           let startID = this.nextID
           let numSpawned = 0
@@ -750,7 +834,6 @@ void main() {
     ANGLE_RANGE[0] = vec2( 0.0, 0.0 ) * radialDir;
     ANGLE_RANGE[1] = vec2( 2.0*PI, 2.0*PI ) * radialDir;
 
-    float ri = 1.0;
     vec3 p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
     vec3 v = randVec3Range( velocity[0].xyz, velocity[1].xyz, seed );
     vec3 a = randVec3Range( acceleration[0].xyz, acceleration[1].xyz, seed );
@@ -774,7 +857,7 @@ void main() {
     vec3 rotationalVelocity = ( va + aa*age );
     vec4 angularQuaternion = eulerToQuaternion( rotationalVelocity * age );
 
-    vec3 velocity = ( v + v2 + ( a + a2 )*age );
+    vec3 velocity = ( v + v2 + 0.5*( a + a2 )*age );
 
     transformed = applyQuaternion( p + p2 + velocity * age, angularQuaternion );
 

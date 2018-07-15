@@ -10,7 +10,7 @@ For a demo goto https://harlyq.github.io/aframe-sprite-particles-component/
 ```html
 <head>
   <script src="https://aframe.io/releases/0.8.2/aframe.min.js"></script>
-  <script src="https://unpkg.com/aframe-sprite-particles-component@^0.1.0/aframe-sprite-particles-component.js"></script>
+  <script src="https://unpkg.com/aframe-sprite-particles-component@^0.2.0/aframe-sprite-particles-component.js"></script>
 </head>
 <body>
   <a-scene>
@@ -59,9 +59,13 @@ The list of properties in alphabetical order:
 
 **duration** - no new particles will be generated after this time in seconds. if negative, particles are generated forever. changing the duration will restart the particle system (*number*) default -1
 
+**editorObject** - if true, generate a bounding box called "mesh" which helps selecting and provides a selection box in the editor (*boolean*) default true
+
 **enableInEditor** - if true, the particle system will run while the AFrame Inspector is active (*boolean*) default false
 
 **fog** - if true, apply fog to all particles (*boolean*) default false
+
+**frustumCulled** - if false then always render the particle system. This is useful for world relative systems that move a lot because the bounds of the particle system are only around the current position, and not all past positions (*boolean*) default true
 
 **lifeTime** - range for maximum age of each particle (*number range*) default 1
 
@@ -117,3 +121,8 @@ For a detailed explaination for depth testing and the depth buffer see https://l
 When using **rotation** on textures with frames, parts of the adjacent frames will be visible during the rotation.  So it is important that there is a large buffer of empty space around the non-transparent parts of the frames, so that adjacent frames don't visibly leak into the particle during rotation.
 
 The particle systems uses a cyclic pool of (**spawnRate * maximum(lifeTime)**) particles and particles that have expired are recycled to become new particles.  This impacts the draw order, because a new particle may actually be recycled from a much older particle and hence be drawn before the previous particle. Typically it is not a problem, but it may explain why a particle system appears different after the first loop.
+
+The object3d name matches the attribute name used to define the component e.g. "sprite-particles" or "sprite-particles__fire".  If the particle system is world relative, then the object3d is attached to the sceneEl, and will
+be the id name followed by the attribute name e.g. "box_sprite-particles" or "bonfire_sprite-particles__fire".  If there is no id for the particles then a unique number will be used e.g. "sprite-particles2", "sprite-particles5".
+
+If the a-entity containing the particle system also contains some other geometry, then **editorObject** will do nothing because we won't override the other geometry.
