@@ -854,7 +854,7 @@ void main() {
     vec3 va = randVec3Range( angularVelocity[0].xyz, angularVelocity[1].xyz, seed );
     vec3 aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
 
-    vec3 rotationalVelocity = ( va + aa*age );
+    vec3 rotationalVelocity = ( va + 0.5*aa*age );
     vec4 angularQuaternion = eulerToQuaternion( rotationalVelocity * age );
 
     vec3 velocity = ( v + v2 + 0.5*( a + a2 )*age );
