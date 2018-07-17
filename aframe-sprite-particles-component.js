@@ -15,7 +15,7 @@
   const USE_PERSPECTIVE_PARAM = 9 // [2].y
   const DIRECTION_PARAM = 10 // [2].x
 
-  const RANDOM_REPEAT_COUNT = 262144; // random numbers will start repeating after this number of particles
+  const RANDOM_REPEAT_COUNT = 131072; // random numbers will start repeating after this number of particles
 
   const degToRad = THREE.Math.degToRad
 
@@ -251,6 +251,10 @@
         this.updateBounds() // call after createMesh()
       }
 
+      if (this.paused && data.editorObject !== oldData.editorObject) {
+        this.enableEditorObject(data.editorObject)
+      }
+
       // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
       if (data.texture !== oldData.texture) {
         this.loadTexture(data.texture)
@@ -268,10 +272,14 @@
     },
 
     pause() {
+      this.paused = true
       this.enablePauseTick(this.data.enableInEditor)
+      this.enableEditorObject(this.data.editorObject)
     },
 
     play() {
+      this.paused = false
+      this.enableEditorObject(false)
       this.enablePauseTick(false)
     },
 
@@ -289,13 +297,22 @@
     },
 
     loadTexture(filename) {
-      this.textureLoader.load(filename, texture => {
-        this.material.uniforms.map.value = texture
-      }, 
-      undefined,
-      err => {
+      if (filename) {
+        let materialSystem = this.el.sceneEl.systems["material"]
+        materialSystem.loadTexture(filename, {src: filename}, (texture) => {
+          this.material.uniforms.map.value = texture        
+        })
+      } else {
         this.material.uniforms.map.value = WHITE_TEXTURE
-      })
+      }
+
+      // this.textureLoader.load(filename, texture => {
+      //   this.material.uniforms.map.value = texture
+      // }, 
+      // undefined,
+      // err => {
+      //   this.material.uniforms.map.value = WHITE_TEXTURE
+      // })
     },
 
     createMesh() {
@@ -500,20 +517,34 @@
       }
       this.geometry.boundingSphere.radius = maxR
 
-      // this does not work correctly if there are multiple particles on an entity
-      if (data.editorObject) {
-        const existingMesh = this.el.getObject3D("mesh")
+      if (!this.geometry.boundingBox) {
+        this.geometry.boundingBox = new THREE.Box3()
+      }
+      this.geometry.boundingBox.min.set(...extent[0])
+      this.geometry.boundingBox.max.set(...extent[1])
 
-        if (!existingMesh || existingMesh.isParticlesEditorObject) {
-          // Add a box3 that can be used to make the particle clickable in the inspector (does not work for world
-          // relative particles), and show a bounding box
-          // Provide some min extents 0.25, in case the particle system is very thin
-          let box3 = new THREE.Box3(new THREE.Vector3(...extent[0].map(x => Math.min(x,-0.25))), new THREE.Vector3(...extent[1].map(x => Math.max(x, 0.25))))
-          let box3Mesh = new THREE.Box3Helper(box3, 0xffff00)
-          box3Mesh.visible = false
-          box3Mesh.isParticlesEditorObject = true
-          this.el.setObject3D("mesh", box3Mesh) // the inspector puts a bounding box around the "mesh" object
-        }
+      const existingMesh = this.el.getObject3D("mesh")
+
+      // update any bounding boxes to the new bounds
+      if (existingMesh && existingMesh.isParticlesEditorObject) {
+        this.enableEditorObject(true)
+      }
+    },
+
+    enableEditorObject(enable) {
+      const existingMesh = this.el.getObject3D("mesh")
+
+      if (enable && (!existingMesh || existingMesh.isParticlesEditorObject)) {
+        const BOX_SIZE = 0.25
+        const maxBound = new THREE.Vector3(BOX_SIZE, BOX_SIZE, BOX_SIZE).max(this.geometry.boundingBox.max)
+        const minBound = new THREE.Vector3(-BOX_SIZE, -BOX_SIZE, -BOX_SIZE).min(this.geometry.boundingBox.min)
+        let box3 = new THREE.Box3(minBound, maxBound)
+        let box3Mesh = new THREE.Box3Helper(box3, 0x808000)
+        box3Mesh.isParticlesEditorObject = true
+        box3Mesh.visible = false
+        this.el.setObject3D("mesh", box3Mesh) // the inspector puts a bounding box around the "mesh" object
+      } else if (!enable && existingMesh && existingMesh.isParticlesEditorObject) {
+        this.el.removeObject3D("mesh")
       }
     },
 

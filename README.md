@@ -97,7 +97,7 @@ The list of properties in alphabetical order:
 
 **spawnType** - continuous particles are emitted at the spawn rate, whilst burst particles are all emitted once the spawner is activated, and are re-emitted once all particles expire (*continuous, burst*) default continous
 
-**texture** - the texture for each particle. if no texture is defined, a white opaque square is used (*map*) default empty
+**texture** - filename or element reference for the texture. if no texture is defined, a white opaque square is used (*map*) default empty
 
 **textureCount** - the number of frames in the **texture**. if 0, the number of frames is assumed to be **textureFrame.x * textureFrame.y** (*int*) default 0
 
