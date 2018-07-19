@@ -61,6 +61,8 @@ The list of properties in alphabetical order:
 
 **editorObject** - if true, generate a bounding box called "mesh" which helps selecting and provides a selection box in the editor (*boolean*) default true
 
+**enable** - enable or disable the emitter. existing particles will continue their lives, but there will be no new particles (*boolean*) default true
+
 **enableInEditor** - if true, the particle system will run while the AFrame Inspector is active (*boolean*) default false
 
 **fog** - if true, apply fog to all particles (*boolean*) default false
@@ -111,6 +113,8 @@ The list of properties in alphabetical order:
 
 
 ## Limitations
+
+To toggle **enable**, the attribute must appear in the component at creation time. It it is left out and then added at a later stage, the first transition from enabled to disabled will kill the wrong particles.
 
 Both radial and non-radial values are applied to each particle. So a particle's position will be the sum of the **position** and **radialPosition**, similarly for velocity and acceleration.
 

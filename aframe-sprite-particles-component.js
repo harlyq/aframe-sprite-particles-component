@@ -4,7 +4,7 @@
 (function() {
 
   const TIME_PARAM = 0 // [0].x
-  const WORLD_RELATIVE_ID_PARAM = 1 // [0].y
+  const ID_PARAM = 1 // [0].y
   const RADIAL_PARAM = 2 // [0].z
   const DURATION_PARAM = 3 // [0].w
   const SPAWN_TYPE_PARAM = 4 // [1].x
@@ -104,6 +104,7 @@
       rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
       opacity: { default: "1" },
 
+      enable: { default: true },
       direction: { default: "forward", oneOf: ["forward", "backward"] },
       alphaTest: { default: 0 }, 
       fog: { default: false },
@@ -140,6 +141,11 @@
       this.nextID = 0
       this.nextTime = 0
       this.relative = this.data.relative // cannot be changed at run-time
+      this.numDisabled = 0
+      this.numEnabled = 0
+      this.manageIDs = false
+
+      this.params[ID_PARAM] = -1 // unmanaged IDs
 
       this.textureLoader = new THREE.TextureLoader()
     },
@@ -255,6 +261,10 @@
         this.enableEditorObject(data.editorObject)
       }
 
+      // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
+      // once managed, always managed
+      this.manageIDs = this.manageIDs || !data.enable || this.relative === "world" || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" 
+
       // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
       if (data.texture !== oldData.texture) {
         this.loadTexture(data.texture)
@@ -268,7 +278,9 @@
       this.emitterTime += dt
       this.params[TIME_PARAM] = this.emitterTime
 
-      this.updateWorldTransform(this.emitterTime) // before we update emitterTime
+      if (this.geometry && this.manageIDs) {
+        this.updateWorldTransform(this.emitterTime)
+      }
     },
 
     pause() {
@@ -305,14 +317,6 @@
       } else {
         this.material.uniforms.map.value = WHITE_TEXTURE
       }
-
-      // this.textureLoader.load(filename, texture => {
-      //   this.material.uniforms.map.value = texture
-      // }, 
-      // undefined,
-      // err => {
-      //   this.material.uniforms.map.value = WHITE_TEXTURE
-      // })
     },
 
     createMesh() {
@@ -563,6 +567,9 @@
         if (this.relative === "world") {
           this.geometry.addAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4).fill(0), 4))
         }
+
+        this.numEnabled = n
+        this.numDisabled = 0
       }
     },
 
@@ -573,52 +580,71 @@
 
       return function(emitterTime) {
         const data = this.data
+        const n = this.count
 
         // for world relative particle the CPU sets the instancePosition and instanceQuaternion
         // of the new particles to the current object3D position/orientation, and tells the GPU
-        // the ID of last emitted particle (this.params[WORLD_RELATIVE_ID_PARAM])
-        if (this.geometry && this.relative === "world") {
-          const spawnRate = this.data.spawnRate
-          const isBurst = data.spawnType === "burst"
-          const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
+        // the ID of last emitted particle (this.params[ID_PARAM])
+        const spawnRate = this.data.spawnRate
+        const isBurst = data.spawnType === "burst"
+        const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
+        const changeIDs = data.enable ? this.numEnabled < n : this.numDisabled < n
+        const isWorldRelative = this.relative === "world"
 
-          let particlePosition = this.geometry.getAttribute("position")
-          let particleQuaternion = this.geometry.getAttribute("quaternion")
+        let particleVertexID = this.geometry.getAttribute("vertexID")
+        let particlePosition = this.geometry.getAttribute("position")
+        let particleQuaternion = this.geometry.getAttribute("quaternion")
+
+        if (isWorldRelative) {
           this.el.object3D.matrixWorld.decompose(position, quaternion, scale)
-
           this.geometry.boundingSphere.center.copy(position)
+        }
 
-          let startID = this.nextID
-          let numSpawned = 0
-          let id = startID
+        let startID = this.nextID
+        let numSpawned = 0
+        let id = startID
 
-          // the nextTime represents the startTime for each particle, so while the nextTime
-          // is less than this frame's time, keep emitting particles. Note, if the spawnRate is
-          // low, we may have to wait several frames before a particle is emitted, but if the 
-          // spawnRate is high we will emit several particles per frame
-          while (this.nextTime < emitterTime && numSpawned < this.count) {
-            id = this.nextID
+        // the nextTime represents the startTime for each particle, so while the nextTime
+        // is less than this frame's time, keep emitting particles. Note, if the spawnRate is
+        // low, we may have to wait several frames before a particle is emitted, but if the 
+        // spawnRate is high we will emit several particles per frame
+        while (this.nextTime < emitterTime && numSpawned < this.count) {
+          id = this.nextID
+
+          if (isWorldRelative) {
             particlePosition.setXYZ(id, position.x, position.y, position.z)
             particleQuaternion.setXYZW(id, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
-
-            numSpawned++
-            this.nextTime += spawnDelta
-            this.nextID = (this.nextID + 1) % this.count // wrap around to 0 if we'd emitted the last particle in our stack
           }
 
-          if (numSpawned > 0) {
-            this.params[WORLD_RELATIVE_ID_PARAM] = id
+          if (changeIDs) {
+            particleVertexID.setX(id, data.enable ? id : -1)
 
-            if (isBurst) { // if we did burst emit, then wait for maxAge before emitting again
-              this.nextTime += this.lifeTime[1]
-            }
+            // if we're enabled then increase the number of enabled and reset the number disabled, once we 
+            // reach this.numEnabled === n, all IDs would have been set and changeIDs will switch to false.
+            // vice versa if we are disabled. these numbers represent the number of consecutive enables or disables.
+            this.numEnabled = data.enable ? this.numEnabled + 1 : 0
+            this.numDisabled = data.enable ? 0 : this.numDisabled + 1
+          }
 
-            // if the buffer was wrapped, we cannot send just the end and beginning of a buffer, so submit everything
-            if (this.nextID < startID) { 
-              startID = 0
-              numSpawned = this.count
-            }
-  
+          numSpawned++
+          this.nextTime += spawnDelta
+          this.nextID = (this.nextID + 1) % this.count // wrap around to 0 if we'd emitted the last particle in our stack
+        }
+
+        if (numSpawned > 0) {
+          this.params[ID_PARAM] = id
+
+          if (isBurst) { // if we did burst emit, then wait for maxAge before emitting again
+            this.nextTime += this.lifeTime[1]
+          }
+
+          // if the buffer was wrapped, we cannot send just the end and beginning of a buffer, so submit everything
+          if (this.nextID < startID) { 
+            startID = 0
+            numSpawned = this.count
+          }
+
+          if (isWorldRelative) {
             particlePosition.updateRange.offset = startID
             particlePosition.updateRange.count = numSpawned
             particlePosition.needsUpdate = numSpawned > 0
@@ -626,6 +652,12 @@
             particleQuaternion.updateRange.offset = startID
             particleQuaternion.updateRange.count = numSpawned
             particleQuaternion.needsUpdate = numSpawned > 0
+          }
+
+          if (changeIDs) {
+            particleVertexID.updateRange.offset = startID
+            particleVertexID.updateRange.count = numSpawned
+            particleVertexID.needsUpdate = numSpawned > 0
           }
         }
       }
@@ -805,7 +837,7 @@ vec3 applyQuaternion( const vec3 v, const vec4 q )
 void main() {
 
   float time = params[0].x;
-  float worldRelativeID = params[0].y;
+  float cpuID = params[0].y;
   float radialType = params[0].z;
   float duration = params[0].w;
   float spawnType = params[1].x;
@@ -813,47 +845,52 @@ void main() {
   float baseSeed = params[1].z;
   float vertexCount = params[1].w;
   float maxAge = angularVelocity[1].w; // lifeTime packed into w component of angularVelocity
+  float age = -1.0;
+  float seed = 0.0;
 
-#if defined(WORLD_RELATIVE)
-  // current ID is set from the CPU so we can synchronize the position correctly
-  float ID0 = worldRelativeID; 
-#else
-  float ID0 = floor( mod( time, maxAge ) * spawnRate ); // this will lose precision eventually
-#endif
+  // the CPU manages IDs if it sets the position or disables particles, otherwise cpuID is -1
+  float ID0 = cpuID > 0.0 ? cpuID : floor( mod( time, maxAge ) * spawnRate ); // this will lose precision eventually
 
-  // particles are either emitted in a burst (spawnType == 0) or spread evenly
-  // throughout 0..maxAge.  We calculate the ID of the last spawned particle ID0 
-  // for this frame, any vertex IDs after ID0 are assumed to belong to the previous loop
+  vAgeRatio = -1.0;
 
-  float loop = floor( time / maxAge ) - spawnType * (vertexID > ID0 ? 1.0 : 0.0);
-  float startTime = loop * maxAge + vertexID / spawnRate * spawnType;
-  float age = startTime >= 0.0 ? time - startTime : -1.0; // if age is -1 we won't show the particle
+  // if ID is less than 0, then this particle is disabled
+  if (vertexID >= 0.0) {
 
-  // we use the id as a seed for the randomizer, but because the IDs are fixed in 
-  // the range 0..vertexCount we calculate a virtual ID by taking into account
-  // the number of loops that have occurred (note, vertexIDs above ID0 are assumed 
-  // to be in the previous loop).  We use the modoulo of the RANDOM_REPEAT_COUNT to
-  // ensure that the virtualID doesn't exceed the floating point precision
+    // particles are either emitted in a burst (spawnType == 0) or spread evenly
+    // throughout 0..maxAge (spawnType == 1).  We calculate the ID of the last spawned particle ID0 
+    // for this frame, any vertex IDs after ID0 are assumed to belong to the previous loop
+  
+    float loop = floor( time / maxAge ) - spawnType * (vertexID > ID0 ? 1.0 : 0.0);
+    float startTime = loop * maxAge + vertexID / spawnRate * spawnType;
+    age = startTime >= 0.0 ? time - startTime : -1.0; // if age is -1 we won't show the particle
+  
+    // we use the id as a seed for the randomizer, but because the IDs are fixed in 
+    // the range 0..vertexCount we calculate a virtual ID by taking into account
+    // the number of loops that have occurred (note, vertexIDs above ID0 are assumed 
+    // to be in the previous loop).  We use the modoulo of the RANDOM_REPEAT_COUNT to
+    // ensure that the virtualID doesn't exceed the floating point precision
+  
+    float virtualID = mod( vertexID + loop * vertexCount, float( RANDOM_REPEAT_COUNT ) );
+    seed = mod(1664525.*virtualID*(baseSeed*110.) + 1013904223., 4294967296.)/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
+  
+    // don't show particles that would be emitted after the duration
+    if ( duration > 0.0 && time - age >= duration ) 
+    {
+      age = -1.0;
+    } 
+    else
+    {
+      float direction = params[2].z; // 0 is forward, 1 is backward
+  
+      age = age + direction * ( maxAge - 2.0 * age );
+    }
 
-  float virtualID = mod( vertexID + loop * vertexCount, float( RANDOM_REPEAT_COUNT ) );
-  float seed = mod(1664525.*virtualID*(baseSeed*110.) + 1013904223., 4294967296.)/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
+    float lifeTime = randFloatRange( angularVelocity[0].w, maxAge, seed );
 
-  float lifeTime = randFloatRange( angularVelocity[0].w, maxAge, seed ); 
-
-  // don't show particles that would be emitted after the duration
-  if ( duration > 0.0 && time - age >= duration ) 
-  {
-    age = -1.0;
-  } 
-  else
-  {
-    float direction = params[2].z; // 0 is forward, 1 is backward
-
-    age = age + direction * ( maxAge - 2.0 * age );
+    // the vAgeRatio will be used for the lerps on over-time attributes
+    vAgeRatio = age/lifeTime;
   }
 
-  // the vAgeRatio will be used for the lerps on over-time attributes
-  vAgeRatio = age/lifeTime;
   vec3 transformed = vec3(0.0);
   float particleScale = 1.0;
 
@@ -904,7 +941,7 @@ void main() {
   }
 
   #include <color_vertex>
-  // #include <begin_vertex>
+  // #include <begin_vertex> replaced by code above
   #include <morphtarget_vertex>
   #include <project_vertex>
 
