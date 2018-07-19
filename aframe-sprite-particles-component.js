@@ -239,7 +239,7 @@
       if (data.spawnType !== oldData.spawnType || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime) {
         this.params[SPAWN_TYPE_PARAM] = data.spawnType === "burst" ? 0 : 1
         this.params[SPAWN_RATE_PARAM] = data.spawnRate
-        this.count = Math.max(1, this.lifeTime[1]*data.spawnRate)
+        this.count = Math.max(1, Math.ceil(this.lifeTime[1]*data.spawnRate))
         this.params[PARTICLE_COUNT_PARAM] = this.count
         this.updateAttributes()
       }
@@ -845,6 +845,7 @@ void main() {
   float baseSeed = params[1].z;
   float vertexCount = params[1].w;
   float maxAge = angularVelocity[1].w; // lifeTime packed into w component of angularVelocity
+  float loopTime = vertexCount / spawnRate;
   float age = -1.0;
   float seed = 0.0;
 
@@ -857,11 +858,11 @@ void main() {
   if (vertexID >= 0.0) {
 
     // particles are either emitted in a burst (spawnType == 0) or spread evenly
-    // throughout 0..maxAge (spawnType == 1).  We calculate the ID of the last spawned particle ID0 
+    // throughout 0..loopTime (spawnType == 1).  We calculate the ID of the last spawned particle ID0 
     // for this frame, any vertex IDs after ID0 are assumed to belong to the previous loop
   
-    float loop = floor( time / maxAge ) - spawnType * (vertexID > ID0 ? 1.0 : 0.0);
-    float startTime = loop * maxAge + vertexID / spawnRate * spawnType;
+    float loop = floor( time / loopTime ) - spawnType * (vertexID > ID0 ? 1.0 : 0.0);
+    float startTime = loop * loopTime + vertexID / spawnRate * spawnType;
     age = startTime >= 0.0 ? time - startTime : -1.0; // if age is -1 we won't show the particle
   
     // we use the id as a seed for the randomizer, but because the IDs are fixed in 
@@ -882,7 +883,7 @@ void main() {
     {
       float direction = params[2].z; // 0 is forward, 1 is backward
   
-      age = age + direction * ( maxAge - 2.0 * age );
+      age = age + direction * ( loopTime - 2.0 * age );
     }
 
     float lifeTime = randFloatRange( angularVelocity[0].w, maxAge, seed );
