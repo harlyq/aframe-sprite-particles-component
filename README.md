@@ -130,3 +130,5 @@ The object3d name matches the attribute name used to define the component e.g. "
 be the id name followed by the attribute name e.g. "box_sprite-particles" or "bonfire_sprite-particles__fire".  If there is no id for the particles then a unique number will be used e.g. "sprite-particles2", "sprite-particles5".
 
 If the a-entity containing the particle system also contains some other geometry, then **editorObject** will do nothing because we won't override the other geometry.
+
+The shader used for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes at run-time (attributes can still be changed in the Inspector). However there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).

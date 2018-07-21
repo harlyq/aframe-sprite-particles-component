@@ -19,6 +19,24 @@
 
   const degToRad = THREE.Math.degToRad
 
+  const ATTR_TO_DEFINES = {
+    acceleration: "USE_PARTICLE_ACCELERATION",
+    angularAcceleration: "USE_PARTICLE_ANGULAR_ACCELERATION",
+    angularVelocity: "USE_PARTICLE_ANGULAR_VELOCITY",
+    color: "USE_PARTICLE_COLOR",
+    textureFrame: "USE_PARTICLE_FRAMES",
+    textureCount: "USE_PARTICLE_FRAMES",
+    textureLoop: "USE_PARTICLE_FRAMES",
+    position: "USE_PARTICLE_OFFSET",
+    opacity: "USE_PARTICLE_OPACITY",
+    radialAcceleration: "USE_PARTICLE_RADIAL_ACCELERATION",
+    radialPosition: "USE_PARTICLE_RADIAL_OFFSET",
+    radialVelocity: "USE_PARTICLE_RADIAL_VELOCITY",
+    rotation: "USE_PARTICLE_ROTATION",
+    scale: "USE_PARTICLE_SCALE",
+    velocity: "USE_PARTICLE_VELOCITY",
+  }
+
   // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
   const flattenDeep = arr1 => arr1.reduce((acc, val) => Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val), [])
 
@@ -125,7 +143,7 @@
     init() {
       this.pauseTick = this.pauseTick.bind(this)
       this.count = 0
-      this.overTimeArrayLength = this.data.overTimeSlots*2 + 1 // each slot represents 2 glsl array elements pluse one element for the length info
+      this.overTimeArrayLength = 0
       this.emitterTime = 0
       this.lifeTime = [1,1]
       this.useTransparent = false
@@ -135,8 +153,8 @@
       this.acceleration = new Float32Array(4*2).fill(0) // xyz is acceleration, w is radialAcceleration
       this.angularVelocity = new Float32Array(4*2).fill(0) // xyz is angularVelocity, w is lifeTime
       this.angularAcceleration = new Float32Array(4*2).fill(0) // xyz is angularAcceleration
-      this.colorOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // color is xyz and opacity is w
-      this.rotationScaleOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // xyz is rotation, w is scale
+      this.colorOverTime // color is xyz and opacity is w. created in update()
+      this.rotationScaleOverTime // xyz is rotation, w is scale. created in update()
       this.params = new Float32Array(4*3).fill(0) // see _PARAM constants
       this.nextID = 0
       this.nextTime = 0
@@ -160,19 +178,21 @@
       const data = this.data
       
       let boundsDirty = data.particleSize !== oldData.particleSize
+      let overTimeDirty = false
 
-      if (data.relative !== this.relative) {
-        console.error("sprite-particles 'relative' cannot be changed at run-time")
-      }
-
-      if (data.overTimeSlots !== (this.overTimeArrayLength - 1)/2) {
-        console.error("sprite-particles 'overTimeSlots' cannot be changed at run-time")
+      // can only change overTimeSlots while paused, as it will rebuild the shader (see updateDefines())
+      if (data.overTimeSlots !== oldData.overTimeSlots && !this.isPlaying) {
+        this.overTimeArrayLength = this.data.overTimeSlots*2 + 1 // each slot represents 2 glsl array elements pluse one element for the length info
+        this.colorOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // color is xyz and opacity is w
+        this.rotationScaleOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // xyz is rotation, w is scale
+        overTimeDirty = true
       }
 
       this.params[PARTICLE_SIZE_PARAM] = data.particleSize
       this.params[USE_PERSPECTIVE_PARAM] = data.usePerspective ? 1 : 0
       this.params[RADIAL_PARAM] = data.radialType === "circle" ? 0 : 1
       this.params[DIRECTION_PARAM] = data.direction === "forward" ? 0 : 1
+
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
       this.textureFrames[2] = data.textureCount > 0 ? data.textureCount : data.textureFrame.x * data.textureFrame.y
@@ -213,17 +233,20 @@
         boundsDirty = true
       }
 
-      if (data.rotation !== oldData.rotation || data.scale !== oldData.scale) {
+      if (data.rotation !== oldData.rotation || data.scale !== oldData.scale || overTimeDirty) {
         this.updateRotationScaleOverTime()
         boundsDirty = true
       }
 
-      if (data.color !== oldData.color || data.opacity !== oldData.opacity) {
+      if (data.color !== oldData.color || data.opacity !== oldData.opacity || overTimeDirty) {
         this.updateColorOverTime()
       }
 
-      if (data.angularVelocity !== oldData.angularVelocity || data.lifeTime !== oldData.lifeTime) {
+      if (data.angularVelocity !== oldData.angularVelocity) {
         this.updateAngularVec4XYZRange(data.angularVelocity, "angularVelocity")
+      }
+
+      if (data.lifeTime !== oldData.lifeTime) {
         this.lifeTime = this.updateVec4WRange(data.lifeTime, [1], "angularVelocity")
       }
 
@@ -248,9 +271,10 @@
         this.enablePauseTick(data.enableInEditor)
       }
 
-      // create the mesh once all of the paramters have been setup
       if (!this.mesh) {
         this.createMesh()
+      } else {
+        this.updateDefines()
       }
 
       if (boundsDirty) {
@@ -353,16 +377,10 @@
         fog: data.fog,
         depthWrite: data.depthWrite,
         depthTest: data.depthTest,
-        defines: {
-          OVER_TIME_ARRAY_LENGTH: this.overTimeArrayLength,
-          RANDOM_REPEAT_COUNT,
-          USE_MAP: true,
-        }
+        defines: {}, // updated in updateDefines()
       })
 
-      if (this.relative === "world") {
-        this.material.defines.WORLD_RELATIVE = true
-      }
+      this.updateDefines()
 
       this.mesh = new THREE.Points(this.geometry, this.material)
       this.mesh.frustumCulled = data.frustumCulled
@@ -573,6 +591,44 @@
       }
     },
 
+    // to get the fastest shader possible we remove unused glsl code via #if defined(USE_...) clauses,
+    // with each clause matching to one or more component attributes. updateDefines() maps each 
+    // attribute to its equivalent USE_... define, and determines if any defines have changed.
+    // If a define has changed and we are playing we generate an error, otherwise (i.e. in the Inspector)
+    // we update the material and rebuild the shader program
+    updateDefines() {
+      const domAttrs = Object.keys(this.el.getDOMAttribute(this.attrName))
+      const domDefines = domAttrs.map(a => ATTR_TO_DEFINES[a]).filter(b => b)
+
+      let defines = {
+        OVER_TIME_ARRAY_LENGTH: this.overTimeArrayLength,
+        RANDOM_REPEAT_COUNT,
+        USE_MAP: true,
+      }
+      for (key of domDefines) {
+        defines[key] = true
+      }
+
+      if (this.relative === "world") {
+        defines.WORLD_RELATIVE = true
+      }
+
+      const extraDefines = Object.keys(defines).filter(b => this.material.defines[b] !== defines[b])
+
+      if (extraDefines.length > 0) {
+        if (this.isPlaying) {
+          const extraAttrs = domAttrs.filter(a => {
+            const b = ATTR_TO_DEFINES[a]
+            return b && !this.material.defines[b]
+          })
+          console.error(`cannot add attributes (${extraAttrs.join(",")}) at run-time`)
+        } else {
+          this.material.defines = defines
+          this.material.needsUpdate = true
+        }
+      }
+    },
+
     updateWorldTransform: (function() {
       let position = new THREE.Vector3()
       let quaternion = new THREE.Quaternion()
@@ -739,9 +795,9 @@ vec4 calcColorOverTime( const float r, const float seed )
 {
   vec3 color = vec3(1.0);
   float opacity = 1.0;
-  int colorN = int( colorOverTime[0].x );
-  int opacityN = int( colorOverTime[0].y );
 
+#if defined(USE_PARTICLE_COLOR)
+  int colorN = int( colorOverTime[0].x );
   if ( colorN == 1 )
   {
     color = randVec3Range( colorOverTime[1].xyz, colorOverTime[2].xyz, seed );
@@ -755,7 +811,10 @@ vec4 calcColorOverTime( const float r, const float seed )
     vec3 eColor = randVec3Range( colorOverTime[i + 2].xyz, colorOverTime[i + 3].xyz, seed );
     color = mix( sColor, eColor, ck - ci );
   }
+#endif
 
+#if defined(USE_PARTICLE_OPACITY)
+  int opacityN = int( colorOverTime[0].y );
   if ( opacityN == 1 )
   {
     opacity = randFloatRange( colorOverTime[1].w, colorOverTime[2].w, seed );
@@ -769,6 +828,7 @@ vec4 calcColorOverTime( const float r, const float seed )
     float eOpacity = randFloatRange( colorOverTime[j + 2].w, colorOverTime[j + 3].w, seed );
     opacity = mix( sOpacity, eOpacity, ok - oi );
   }
+#endif
 
   return vec4( color, opacity );
 }
@@ -779,9 +839,9 @@ vec4 calcRotationScaleOverTime( const float r, const float seed )
 {
   vec3 rotation = vec3(0.);
   float scale = 1.0;
-  int rotationN = int( rotationScaleOverTime[0].x );
-  int scaleN = int( rotationScaleOverTime[0].y );
 
+#if defined(USE_PARTICLE_ROTATION)
+  int rotationN = int( rotationScaleOverTime[0].x );
   if ( rotationN == 1 )
   {
     rotation = randVec3Range( rotationScaleOverTime[1].xyz, rotationScaleOverTime[2].xyz, seed );
@@ -795,7 +855,10 @@ vec4 calcRotationScaleOverTime( const float r, const float seed )
     vec3 eRotation = randVec3Range( rotationScaleOverTime[i + 2].xyz, rotationScaleOverTime[i + 3].xyz, seed );
     rotation = mix( sRotation, eRotation, rk - ri );
   }
+#endif
 
+#if defined(USE_PARTICLE_SCALE)
+  int scaleN = int( rotationScaleOverTime[0].y );
   if ( scaleN == 1 )
   {
     scale = randFloatRange( rotationScaleOverTime[1].w, rotationScaleOverTime[2].w, seed );
@@ -809,6 +872,7 @@ vec4 calcRotationScaleOverTime( const float r, const float seed )
     float eScale = randFloatRange( rotationScaleOverTime[j + 2].w, rotationScaleOverTime[j + 3].w, seed );
     scale = mix( sScale, eScale, sk - si );
   }
+#endif
 
   return vec4( rotation, scale );
 }
@@ -903,36 +967,70 @@ void main() {
     ANGLE_RANGE[0] = vec2( 0.0, 0.0 ) * radialDir;
     ANGLE_RANGE[1] = vec2( 2.0*PI, 2.0*PI ) * radialDir;
 
-    vec3 p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
-    vec3 v = randVec3Range( velocity[0].xyz, velocity[1].xyz, seed );
+    vec3 p = vec3(0.0);
+    vec3 v = vec3(0.0);
+    vec3 av = vec3(0.0);
+
+#if defined(USE_PARTICLE_OFFSET)
+    p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
+#endif
+
+#if defined(USE_PARTICLE_VELOCITY)
+    v = randVec3Range( velocity[0].xyz, velocity[1].xyz, seed );
+#endif
+
+#if defined(USE_PARTICLE_ACCELERATION)
     vec3 a = randVec3Range( acceleration[0].xyz, acceleration[1].xyz, seed );
+    v += a*age*0.5;
+#endif
 
+#if defined(USE_PARTICLE_RADIAL_OFFSET) || defined(USE_PARTICLE_RADIAL_VELOCITY) || defined(USE_PARTICLE_RADIAL_ACCELERATION)
     vec2 theta = randVec2Range( ANGLE_RANGE[0], ANGLE_RANGE[1], seed );
+#endif
 
+#if defined(USE_PARTICLE_RADIAL_OFFSET)
     float pr = randFloatRange( offset[0].w, offset[1].w, seed );
     vec3 p2 = radialToVec3( pr, theta );
+    p += p2;
+#endif
 
+#if defined(USE_PARTICLE_RADIAL_VELOCITY)
     float vr = randFloatRange( velocity[0].w, velocity[1].w, seed );
     vec3 v2 = radialToVec3( vr, theta );
+    v += v2;
+#endif
 
+#if defined(USE_PARTICLE_RADIAL_ACCELERATION)
     float ar = randFloatRange( acceleration[0].w, acceleration[1].w, seed );
     vec3 a2 = radialToVec3( ar, theta );
+    v += a2*age*0.5;
+#endif
 
     vec4 rotScale = calcRotationScaleOverTime( vAgeRatio, seed );
 
-    vec3 va = randVec3Range( angularVelocity[0].xyz, angularVelocity[1].xyz, seed );
+#if defined(USE_PARTICLE_ANGULAR_VELOCITY)
+    av = randVec3Range( angularVelocity[0].xyz, angularVelocity[1].xyz, seed );
+#endif
+
+#if defined(USE_PARTICLE_ANGULAR_ACCELERATION)
     vec3 aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
+    av += aa*0.5*age;
+#endif
 
-    vec3 rotationalVelocity = ( va + 0.5*aa*age );
-    vec4 angularQuaternion = eulerToQuaternion( rotationalVelocity * age );
+    transformed = p + v*age;
 
-    vec3 velocity = ( v + v2 + 0.5*( a + a2 )*age );
+#if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
+    // vec3 rotationalVelocity = ( va + 0.5*aa*age );
+    vec4 angularQuaternion = eulerToQuaternion( av * age );
 
-    transformed = applyQuaternion( p + p2 + velocity * age, angularQuaternion );
+    // vec3 velocity = ( v + v2 + 0.5*( a + a2 )*age );
 
-  #if defined(WORLD_RELATIVE)
+    transformed = applyQuaternion( transformed, angularQuaternion );
+#endif
+
+#if defined(WORLD_RELATIVE)
     transformed = applyQuaternion( transformed, quaternion );
-  #endif
+#endif
 
     transformed += position;
 
@@ -986,6 +1084,7 @@ void main() {
   vec4 diffuseColor = vec4( emitterColor, emitterOpacity );
   mat3 uvTransform = mat3(1.0);
 
+#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES)
   {
     vec2 invTextureFrame = 1.0 / textureFrames.xy;
     float textureCount = textureFrames.z;
@@ -1009,6 +1108,7 @@ void main() {
     uvTransform[2][0] = c * tx + s * ty - ( c * cx + s * cy ) + cx;
     uvTransform[2][1] = -s * tx + c * ty - ( -s * cx + c * cy ) + cy;
   }
+#endif
 
   #include <logdepthbuf_fragment>
   #include <map_particle_fragment>
