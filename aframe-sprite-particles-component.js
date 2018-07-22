@@ -35,6 +35,8 @@
     rotation: "USE_PARTICLE_ROTATION",
     scale: "USE_PARTICLE_SCALE",
     velocity: "USE_PARTICLE_VELOCITY",
+    orbitalVelocity: "USE_ORBITAL",
+    orbitalAcceleration: "USE_ORBITAL",
   }
 
   // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
@@ -117,6 +119,8 @@
       radialAcceleration: { default: "0" },
       angularVelocity: { default: "0 0 0" },
       angularAcceleration: { default: "0 0 0" },
+      orbitalVelocity: { default: "0" },
+      orbitalAcceleration: { default: "0" },
       scale: { default: "1" },
       color: { default: "white", parse: toLowerCase },
       rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
@@ -153,8 +157,9 @@
       this.acceleration = new Float32Array(4*2).fill(0) // xyz is acceleration, w is radialAcceleration
       this.angularVelocity = new Float32Array(4*2).fill(0) // xyz is angularVelocity, w is lifeTime
       this.angularAcceleration = new Float32Array(4*2).fill(0) // xyz is angularAcceleration
+      this.orbital = new Float32Array(2*2).fill(0) // x is orbitalVelocity, y is orbitalAcceleration
       this.colorOverTime // color is xyz and opacity is w. created in update()
-      this.rotationScaleOverTime // xyz is rotation, w is scale. created in update()
+      this.rotationScaleOverTime // x is rotation, y is scale. created in update()
       this.params = new Float32Array(4*3).fill(0) // see _PARAM constants
       this.nextID = 0
       this.nextTime = 0
@@ -184,7 +189,7 @@
       if (data.overTimeSlots !== oldData.overTimeSlots && !this.isPlaying) {
         this.overTimeArrayLength = this.data.overTimeSlots*2 + 1 // each slot represents 2 glsl array elements pluse one element for the length info
         this.colorOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // color is xyz and opacity is w
-        this.rotationScaleOverTime = new Float32Array(4*this.overTimeArrayLength).fill(0) // xyz is rotation, w is scale
+        this.rotationScaleOverTime = new Float32Array(2*this.overTimeArrayLength).fill(0) // x is rotation, y is scale
         overTimeDirty = true
       }
 
@@ -242,16 +247,24 @@
         this.updateColorOverTime()
       }
 
-      if (data.angularVelocity !== oldData.angularVelocity) {
-        this.updateAngularVec4XYZRange(data.angularVelocity, "angularVelocity")
-      }
-
       if (data.lifeTime !== oldData.lifeTime) {
         this.lifeTime = this.updateVec4WRange(data.lifeTime, [1], "angularVelocity")
       }
 
+      if (data.angularVelocity !== oldData.angularVelocity) {
+        this.updateAngularVec4XYZRange(data.angularVelocity, "angularVelocity")
+      }
+
       if (data.angularAcceleration !== oldData.angularAcceleration) {
         this.updateAngularVec4XYZRange(data.angularAcceleration, "angularAcceleration")
+      }
+
+      if (data.orbitalVelocity !== oldData.orbitalVelocity) {
+        this.updateAngularVec2PartRange(data.orbitalVelocity, [0], "orbital", 0) // x part
+      }
+
+      if (data.orbitalAcceleration !== oldData.orbitalAcceleration) {
+        this.updateAngularVec2PartRange(data.orbitalAcceleration, [0], "orbital", 1) // y part
       }
 
       if (data.duration !== oldData.duration) {
@@ -361,6 +374,7 @@
           acceleration: { value: this.acceleration },
           angularVelocity: { value: this.angularVelocity },
           angularAcceleration: { value: this.angularAcceleration },
+          orbital: { value: this.orbital },
           colorOverTime: { value: this.colorOverTime },
           rotationScaleOverTime: { value: this.rotationScaleOverTime },
 
@@ -434,30 +448,28 @@
 
     updateRotationScaleOverTime() {
       const maxSlots = this.data.overTimeSlots
-      let rotation = parseVecRangeArray(this.data.rotation, [0,0,0])
+      let rotation = parseVecRangeArray(this.data.rotation, [0])
       let scale = parseVecRangeArray(this.data.scale, [1])
 
 
-      if (rotation.length/3 > maxSlots*2) rotation.length = maxSlots*2*3 // 3 numbers per rotation, 2 rotations per range
+      if (rotation.length > maxSlots*2) rotation.length = maxSlots*2 // 2 rotations per range
       if (scale.length > maxSlots*2) scale.length = maxSlots*2 // 2 scales per range
 
       // first vec4 contains the lengths of the rotation and scale vectors
       this.rotationScaleOverTime.fill(0)
-      this.rotationScaleOverTime[0] = rotation.length/6
+      this.rotationScaleOverTime[0] = rotation.length/2
       this.rotationScaleOverTime[1] = scale.length/2
 
-      // set k to 4 because the first vec4 of rotationScaleOverTime is use for the length params
-      // update i by 3 becase rotation is 3 numbers per vector, and k by 4 because rotationScaleOverTime is 4 numbers per vector
+      // set k to 2 because the first vec2 of rotationScaleOverTime is use for the length params
+      // update i by 1 becase rotation is 1 numbers per vector, and k by 2 because rotationScaleOverTime is 2 numbers per vector
       let n = rotation.length
-      for (let i = 0, k = 4; i < n; i += 3, k += 4) {
+      for (let i = 0, k = 2; i < n; i ++, k += 2) {
         this.rotationScaleOverTime[k] = degToRad(rotation[i]) // glsl rotationScaleOverTime[1..].x
-        this.rotationScaleOverTime[k+1] = degToRad(rotation[i+1]) // glsl rotationScaleOverTime[1..].y
-        this.rotationScaleOverTime[k+2] = degToRad(rotation[i+2]) // glsl rotationScaleOverTime[1..].z
       }
 
       n = scale.length
-      for (let i = 0, k = 4; i < n; i++, k += 4) {
-        this.rotationScaleOverTime[k+3] = scale[i] // glsl rotationScaleOverTime[1..].w
+      for (let i = 0, k = 2; i < n; i++, k += 2) {
+        this.rotationScaleOverTime[k+1] = scale[i] // glsl rotationScaleOverTime[1..].y
       }
     },
 
@@ -479,6 +491,12 @@
         this[uniformAttr][j++] = degToRad(vecRange[i++]) // z
         j++ // skip the w
       }
+    },
+
+    updateAngularVec2PartRange(vecData, def, uniformAttr, part) {
+      const vecRange = parseVecRange(vecData, def)
+      this[uniformAttr][part] = degToRad(vecRange[0])
+      this[uniformAttr][part + 2] = degToRad(vecRange[1])
     },
 
     // update just the w component
@@ -520,14 +538,17 @@
       }
 
       // apply the radial extents to the XYZ extents
-      const maxScale = Math.max(this.rotationScaleOverTime[3], this.rotationScaleOverTime[7])
+      const domAttrs = this.el.getDOMAttribute(this.attrName)
+      const maxScale = this.rotationScaleOverTime.reduce((max, x, i) => (i & 1) ? Math.max(max, x) : max, 0) // scale is every second number
       const maxRadial = Math.max(Math.abs(extent[0][3]), Math.abs(extent[1][3])) + data.particleSize*0.00045*maxScale
+      const isSphere = data.radialType === "sphere" || domAttrs.angularVelocity || domAttrs.angularAcceleration || domAttrs.orbitalVelocity || domAttrs.orbitalAcceleration
+
       extent[0][0] -= maxRadial
       extent[0][1] -= maxRadial
-      extent[0][2] -= data.radialType === "sphere" ? maxRadial : 0
+      extent[0][2] -= isSphere ? maxRadial : 0
       extent[1][0] += maxRadial
       extent[1][1] += maxRadial
-      extent[1][2] += data.radialType === "sphere" ? maxRadial : 0
+      extent[1][2] += isSphere ? maxRadial : 0
 
       // discard the radial element
       extent[0].length = 3
@@ -741,8 +762,9 @@ uniform vec4 velocity[2];
 uniform vec4 acceleration[2];
 uniform vec4 angularVelocity[2];
 uniform vec4 angularAcceleration[2];
+uniform vec2 orbital[2];
 uniform vec4 colorOverTime[OVER_TIME_ARRAY_LENGTH];
-uniform vec4 rotationScaleOverTime[OVER_TIME_ARRAY_LENGTH];
+uniform vec2 rotationScaleOverTime[OVER_TIME_ARRAY_LENGTH];
 uniform vec4 textureFrames;
 
 varying vec4 vParticleColor;
@@ -835,24 +857,24 @@ vec4 calcColorOverTime( const float r, const float seed )
 
 // as per calcColorOverTime but euler rotation is packed in xyz and scale in w
 
-vec4 calcRotationScaleOverTime( const float r, const float seed )
+vec2 calcRotationScaleOverTime( const float r, const float seed )
 {
-  vec3 rotation = vec3(0.);
+  float rotation = 0.0;
   float scale = 1.0;
 
 #if defined(USE_PARTICLE_ROTATION)
   int rotationN = int( rotationScaleOverTime[0].x );
   if ( rotationN == 1 )
   {
-    rotation = randVec3Range( rotationScaleOverTime[1].xyz, rotationScaleOverTime[2].xyz, seed );
+    rotation = randFloatRange( rotationScaleOverTime[1].x, rotationScaleOverTime[2].x, seed );
   }
   else if ( rotationN > 1 )
   {
     float rk = r * ( float( rotationN ) - 1.0 );
     float ri = floor( rk );
     int i = int( ri )*2 + 1; // *2 because each range is 2 vectors, and +1 because the first vector is for the length info
-    vec3 sRotation = randVec3Range( rotationScaleOverTime[i].xyz, rotationScaleOverTime[i + 1].xyz, seed );
-    vec3 eRotation = randVec3Range( rotationScaleOverTime[i + 2].xyz, rotationScaleOverTime[i + 3].xyz, seed );
+    float sRotation = randFloatRange( rotationScaleOverTime[i].x, rotationScaleOverTime[i + 1].x, seed );
+    float eRotation = randFloatRange( rotationScaleOverTime[i + 2].x, rotationScaleOverTime[i + 3].x, seed );
     rotation = mix( sRotation, eRotation, rk - ri );
   }
 #endif
@@ -861,20 +883,20 @@ vec4 calcRotationScaleOverTime( const float r, const float seed )
   int scaleN = int( rotationScaleOverTime[0].y );
   if ( scaleN == 1 )
   {
-    scale = randFloatRange( rotationScaleOverTime[1].w, rotationScaleOverTime[2].w, seed );
+    scale = randFloatRange( rotationScaleOverTime[1].y, rotationScaleOverTime[2].y, seed );
   }
   else if ( scaleN > 1 )
   {
     float sk = r * ( float( scaleN ) - 1.0 );
     float si = floor( sk );
     int j = int( si )*2 + 1; // *2 because each range is 2 vectors, and +1 because the first vector is for the length info
-    float sScale = randFloatRange( rotationScaleOverTime[j].w, rotationScaleOverTime[j + 1].w, seed );
-    float eScale = randFloatRange( rotationScaleOverTime[j + 2].w, rotationScaleOverTime[j + 3].w, seed );
+    float sScale = randFloatRange( rotationScaleOverTime[j].y, rotationScaleOverTime[j + 1].y, seed );
+    float eScale = randFloatRange( rotationScaleOverTime[j + 2].y, rotationScaleOverTime[j + 3].y, seed );
     scale = mix( sScale, eScale, sk - si );
   }
 #endif
 
-  return vec4( rotation, scale );
+  return vec2( rotation, scale );
 }
 
 // assumes euler order is YXZ (standard convention for AFrame)
@@ -891,6 +913,12 @@ vec4 eulerToQuaternion( const vec3 euler )
     c.x * c.y * s.z - s.x * s.y * c.z,
     c.x * c.y * c.z + s.x * s.y * s.z
   );
+}
+
+// from http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/index.htm
+vec4 axisAngleToQuaternion( const vec3 axis, const float angle ) 
+{
+  return vec4( axis * sin( angle*0.5 ), cos( angle*0.5 ) );
 }
 
 vec3 applyQuaternion( const vec3 v, const vec4 q )
@@ -1006,8 +1034,6 @@ void main() {
     v += a2*age*0.5;
 #endif
 
-    vec4 rotScale = calcRotationScaleOverTime( vAgeRatio, seed );
-
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY)
     av = randVec3Range( angularVelocity[0].xyz, angularVelocity[1].xyz, seed );
 #endif
@@ -1028,13 +1054,28 @@ void main() {
     transformed = applyQuaternion( transformed, angularQuaternion );
 #endif
 
+#if defined(USE_ORBITAL)
+    float ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
+    float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
+    float angle = (ov + oa*0.5*age)*age;
+
+    // if p is (0,0,0) then transformed will not change
+    vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p
+    vec3 axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
+
+    transformed = applyQuaternion( transformed, axisAngleToQuaternion( axis, angle ) );
+#endif
+
+
 #if defined(WORLD_RELATIVE)
     transformed = applyQuaternion( transformed, quaternion );
 #endif
 
     transformed += position;
 
-    particleScale = rotScale.w;
+    vec2 rotScale = calcRotationScaleOverTime( vAgeRatio, seed );
+
+    particleScale = rotScale.y;
     vParticleColor = calcColorOverTime( vAgeRatio, seed ); // rgba format
     vRotation = rotScale.x;
   }

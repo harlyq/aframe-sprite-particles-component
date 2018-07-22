@@ -9,6 +9,8 @@
     <a-scene background="color: black">
       <a-assets>
         <img id="blob" src="assets/blob.png">
+        <img id="raindash" src="assets/raindash.png">
+        <img id="tree" src="assets/tree.png">
         <a-mixin id="label" text="align: center; width: 10" position="0 -1.5 0"></a-mixin>
       </a-assets>
       <a-entity position="0 0 -15">
@@ -29,7 +31,7 @@
           <a-text value="circle" mixin="label"></a-text>
         </a-entity>
         <a-entity position="4 0 0">
-          <a-entity sprite-particles="texture: assets/blob.png; color: blue; position: -1 1 -1..1 1 1; spawnRate: 200; velocity: 0 -10 0; lifeTime: .25"></a-entity>
+          <a-entity sprite-particles="texture: #raindash; color: blue; position: -1 1 -1..1 1 1; spawnRate: 200; velocity: 0 -10 0; lifeTime: .25; scale: 2; opacity: 0.5"></a-entity>
           <a-text value="rainfall" mixin="label"></a-text>
         </a-entity>
         <a-entity position="8 0 0">
@@ -127,6 +129,18 @@
               id.setAttribute("sprite-particles", {enable})
             }, 5000)
           </script>
+        </a-entity>
+        <a-entity position="-4 -8 0">
+          <a-entity sprite-particles="texture: #blob; spawnRate: 2; lifeTime: 6; radialPosition: 1; orbitalVelocity: 300; orbitalAcceleration: -30..30; color: yellow,black"></a-entity>
+          <a-text value="orbital" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="-8 -8 0">
+          <a-entity sprite-particles="texture: #blob; spawnRate: 20; lifeTime: 6; radialPosition: 1; angularVelocity: 300 0 0; color: red,black"></a-entity>
+          <a-text value="angular" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="4 -8 0">
+          <a-entity sprite-particles="texture: #tree; spawnRate: 0.3; spawnType: burst; lifeTime: 1000; position: -1 -1 0..1 1 0; color: orange..red; scale: 2.5..3.5"></a-entity>
+          <a-text value="fixed" mixin="label"></a-text>
         </a-entity>
       </a-entity>
     </a-scene>

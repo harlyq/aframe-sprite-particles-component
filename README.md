@@ -71,13 +71,17 @@ The list of properties in alphabetical order:
 
 **lifeTime** - range for maximum age of each particle (*number range*) default 1
 
-**position** - range for offseting the initial particle position in local coordinates (*vec3 range*) default 0 0 0
+**orbitalAcceleration** - acceleration (degrees per second squared) for a particle orbiting around the oribin (*number range*) default 0
+
+**orbitalVelocity** - velocity (degrees per second) for a particle orbiting around the origin (*number range*) default 0
 
 **opacity** - over-time ranges for the particle opacity. `0` is transparent, `1` is opaque (*number range array*) default 1
 
 **overTimeSlots** - maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed at run-time) (*int*) default 5
 
 **particleSize** - the size of each particle in pixels. if **usePerspective** is `true` then this is the size of the particle at 1m from the camera (*number*) default 100
+
+**position** - range for offseting the initial particle position in local coordinates (*vec3 range*) default 0 0 0
 
 **radialAcceleration** - range for an acceleration from the local origin (*number range*) default 0
 
