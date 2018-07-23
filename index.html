@@ -39,7 +39,7 @@
           <a-text value="snowfall" mixin="label"></a-text>
         </a-entity>
         <a-entity position="0 4 0">
-          <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialVelocity: 2..4; radialAcceleration: -2; lifeTime: .5; scale: 1,.2; particleSize: 25"></a-entity>
+          <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialVelocity: 2..4; radialAcceleration: -2; lifeTime: .5; scale: 1; particleSize: 25"></a-entity>
           <a-text value="fireworks" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-4 4 0">
@@ -59,7 +59,7 @@
           <a-text value="smoke" mixin="label"></a-text>
         </a-entity>
         <a-entity position="8 4 0">
-          <a-entity sprite-particles="texture: assets/fireworks_sheet.png; textureFrame: 5 5; spawnRate: .2; lifeTime: 2; scale: 15"></a-entity>
+          <a-entity sprite-particles="texture: assets/fireworks_sheet.png; textureFrame: 5 5; spawnRate: .3; lifeTime: 2; scale: 15"></a-entity>
           <a-text value="frames" mixin="label"></a-text>
         </a-entity>
         <a-entity position="0 8 0">
@@ -100,7 +100,7 @@
           <a-text value="additive blending" mixin="label"></a-text>
         </a-entity>
         <a-entity id="bonfire" position="-8 -4 0">
-          <a-entity
+          <a-entity position="0 -0.6 0"
             sprite-particles__smoke="texture: assets/fog.png; velocity: -.1 1 -.3.. .3 1 .3; spawnRate: 12; lifeTime: 4; scale: 4,8; opacity: 0,1,0; color: #666,#222"
             sprite-particles__fire="texture: assets/explosion_sheet.png; textureFrame: 5 5; velocity: .2 .1 -.2.. .6 .1 .2; acceleration: 0 1 0..0 3 0; spawnRate: 15; scale: 2..4,6..8; opacity: 1,0; angularVelocity: 0 60 0; blending: additive"
             sprite-particles__sparks="color: yellow, red; spawnRate: 10; lifeTime: 0.3..0.7; velocity: 0 2.5..0 4.5; angularVelocity: -50 0 -50..50 0 50; scale: .1...4"></a-entity>
@@ -141,6 +141,11 @@
         <a-entity position="4 -8 0">
           <a-entity sprite-particles="texture: #tree; spawnRate: 0.3; spawnType: burst; lifeTime: 1000; position: -1 -1 0..1 1 0; color: orange..red; scale: 2.5..3.5"></a-entity>
           <a-text value="fixed" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="8 -8 0">
+          <a-obj-model id="house" scale="0.02 0.02 0.02" src="assets/house/house.obj" visible="false"></a-obj-model>
+          <a-entity rotation="0 180 0" position="3 -0.5 0" sprite-particles="model: #house; texture: #blob; spawnRate: 400; lifeTime: 5; particleSize: 10"></a-entity>
+          <a-text value="model" mixin="label"></a-text>
         </a-entity>
       </a-entity>
     </a-scene>

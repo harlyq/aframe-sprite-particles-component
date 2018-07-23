@@ -71,6 +71,8 @@ The list of properties in alphabetical order:
 
 **lifeTime** - range for maximum age of each particle (*number range*) default 1
 
+**model** - the particles spawn in positions on the surface of the model (*selector*) default null
+
 **orbitalAcceleration** - acceleration (degrees per second squared) for a particle orbiting around the oribin (*number range*) default 0
 
 **orbitalVelocity** - velocity (degrees per second) for a particle orbiting around the origin (*number range*) default 0
@@ -136,3 +138,5 @@ be the id name followed by the attribute name e.g. "box_sprite-particles" or "bo
 If the a-entity containing the particle system also contains some other geometry, then **editorObject** will do nothing because we won't override the other geometry.
 
 The shader used for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes at run-time (attributes can still be changed in the Inspector). However there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).
+
+When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.

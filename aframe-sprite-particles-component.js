@@ -15,6 +15,8 @@
   const USE_PERSPECTIVE_PARAM = 9 // [2].y
   const DIRECTION_PARAM = 10 // [2].x
 
+  const MODEL_MESH = "mesh"
+
   const RANDOM_REPEAT_COUNT = 131072; // random numbers will start repeating after this number of particles
 
   const degToRad = THREE.Math.degToRad
@@ -127,6 +129,7 @@
       opacity: { default: "1" },
 
       enable: { default: true },
+      model: { type: "selector" },
       direction: { default: "forward", oneOf: ["forward", "backward"] },
       alphaTest: { default: 0 }, 
       fog: { default: false },
@@ -146,6 +149,8 @@
 
     init() {
       this.pauseTick = this.pauseTick.bind(this)
+      this.handleObject3DSet = this.handleObject3DSet.bind(this)
+
       this.count = 0
       this.overTimeArrayLength = 0
       this.emitterTime = 0
@@ -169,14 +174,15 @@
       this.manageIDs = false
 
       this.params[ID_PARAM] = -1 // unmanaged IDs
-
-      this.textureLoader = new THREE.TextureLoader()
     },
 
     remove() {
       if (this.mesh) {
         this.parentEl.removeObject3D(this.mesh.name)
-      } 
+      }
+      if (data.model) {
+        data.model.removeEventListener("object3dset", this.handleObject3DSet)
+      }
     },
 
     update(oldData) {
@@ -284,6 +290,12 @@
         this.enablePauseTick(data.enableInEditor)
       }
 
+      if (data.model !== oldData.model && data.model && "getObject3D" in data.model) {
+        if (oldData.model) { oldData.model.removeEventListener("object3dset", this.handleObject3DSet) }
+        this.updateModelMesh(data.model.getObject3D(MODEL_MESH))
+        if (data.model) { data.model.addEventListener("object3dset", this.handleObject3DSet) }
+      }
+
       if (!this.mesh) {
         this.createMesh()
       } else {
@@ -300,7 +312,7 @@
 
       // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
       // once managed, always managed
-      this.manageIDs = this.manageIDs || !data.enable || this.relative === "world" || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" 
+      this.manageIDs = this.manageIDs || !data.enable || this.relative === "world" || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" || data.model
 
       // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
       if (data.texture !== oldData.texture) {
@@ -309,14 +321,16 @@
     },
 
     tick(time, deltaTime) {
-      if (deltaTime > 100) deltaTime = 100 // ignore long pauses
-      const dt = deltaTime/1000 // dt is in seconds
-
-      this.emitterTime += dt
-      this.params[TIME_PARAM] = this.emitterTime
-
-      if (this.geometry && this.manageIDs) {
-        this.updateWorldTransform(this.emitterTime)
+      if (!this.data.model || this.modelVertices) {
+        if (deltaTime > 100) deltaTime = 100 // ignore long pauses
+        const dt = deltaTime/1000 // dt is in seconds
+  
+        this.emitterTime += dt
+        this.params[TIME_PARAM] = this.emitterTime
+  
+        if (this.geometry && this.manageIDs) {
+          this.updateWorldTransform(this.emitterTime)
+        }
       }
     },
 
@@ -343,6 +357,12 @@
     pauseTick() {
       this.tick(0, 16) // time is not used
       this.enablePauseTick(true)
+    },
+
+    handleObject3DSet(event) {
+      if (event.target === this.data.model && event.detail.type === MODEL_MESH) {
+        this.updateModelMesh(this.data.model.getObject3D(MODEL_MESH))
+      }
     },
 
     loadTexture(filename) {
@@ -537,6 +557,16 @@
         }
       }
 
+      // include the bounds the base model
+      if (this.modelBounds) {
+        extent[0][0] += this.modelBounds.min.x
+        extent[0][1] += this.modelBounds.min.y
+        extent[0][2] += this.modelBounds.min.z
+        extent[1][0] += this.modelBounds.max.x
+        extent[1][1] += this.modelBounds.max.y
+        extent[1][2] += this.modelBounds.max.z
+     }
+
       // apply the radial extents to the XYZ extents
       const domAttrs = this.el.getDOMAttribute(this.attrName)
       const maxScale = this.rotationScaleOverTime.reduce((max, x, i) => (i & 1) ? Math.max(max, x) : max, 0) // scale is every second number
@@ -650,10 +680,49 @@
       }
     },
 
+    updateModelMesh(mesh) {
+      if (!mesh) { return }
+
+      this.modelBounds = new THREE.Box3()
+      this.modelVertices
+      let offset = 0
+      let numFloats = 0
+      let stage = 0
+
+      const parseModel = (obj3D) => {
+        if (!obj3D.geometry) { return }
+
+        let positions = obj3D.geometry.getAttribute("position")
+        if (positions && positions.itemSize !== 3) { return } // some text geometry uses 2D positions 
+
+        if (stage == 0) {
+          numFloats += positions.array.length
+        } else {
+          this.modelVertices.set(positions.array, offset)
+          offset += positions.array.length
+        }
+      }
+
+      stage = 0
+      mesh.traverse(parseModel)
+
+      if (numFloats > 0) {
+        stage = 1
+        this.modelVertices = new Float32Array(numFloats)
+        mesh.traverse(parseModel)
+
+        applyScale(this.modelVertices, mesh.el.object3D.scale)
+
+        this.modelBounds.setFromArray(this.modelVertices)
+        this.updateBounds()
+      }
+    },
+
     updateWorldTransform: (function() {
       let position = new THREE.Vector3()
       let quaternion = new THREE.Quaternion()
       let scale = new THREE.Vector3()
+      let modelPosition = new THREE.Vector3()
 
       return function(emitterTime) {
         const data = this.data
@@ -667,6 +736,7 @@
         const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
         const changeIDs = data.enable ? this.numEnabled < n : this.numDisabled < n
         const isWorldRelative = this.relative === "world"
+        const isUsingModel = this.modelVertices && this.modelVertices.length
 
         let particleVertexID = this.geometry.getAttribute("vertexID")
         let particlePosition = this.geometry.getAttribute("position")
@@ -687,6 +757,11 @@
         // spawnRate is high we will emit several particles per frame
         while (this.nextTime < emitterTime && numSpawned < this.count) {
           id = this.nextID
+
+          if (isUsingModel) {
+            randomPointInTriangle(this.modelVertices, modelPosition)
+            particlePosition.setXYZ(id, modelPosition.x, modelPosition.y, modelPosition.z)
+          }
 
           if (isWorldRelative) {
             particlePosition.setXYZ(id, position.x, position.y, position.z)
@@ -721,11 +796,13 @@
             numSpawned = this.count
           }
 
-          if (isWorldRelative) {
+          if (isWorldRelative || isUsingModel) {
             particlePosition.updateRange.offset = startID
             particlePosition.updateRange.count = numSpawned
             particlePosition.needsUpdate = numSpawned > 0
+          }
 
+          if (isWorldRelative) {
             particleQuaternion.updateRange.offset = startID
             particleQuaternion.updateRange.count = numSpawned
             particleQuaternion.needsUpdate = numSpawned > 0
@@ -740,6 +817,61 @@
       }
     })(),
   })
+
+  const applyScale = (vertices, scale) => {
+    if (scale.x !== 1 && scale.y !== 1 && scale.z !== 1) {
+      for (let i = 0, n = vertices.length; i < n; i+=3) {
+        vertices[i] *= scale.x
+        vertices[i+1] *= scale.y
+        vertices[i+2] *= scale.z
+      }
+    }
+  }
+
+  const randomPointInTriangle = (function() {
+    let v1 = new THREE.Vector3()
+    let v2 = new THREE.Vector3()
+
+    // see http://mathworld.wolfram.com/TrianglePointPicking.html
+    return function randomPointInTriangle(vertices, pos) {
+      // assume each set of 3 vertices (each vertex has 3 floats) is a triangle
+      let triangleOffset = Math.floor(Math.random()*vertices.length/9)*9
+      v1.fromArray(vertices, triangleOffset)
+      v2.fromArray(vertices, triangleOffset + 3)
+      pos.fromArray(vertices, triangleOffset + 6)
+
+      let r1, r2
+      do {
+        r1 = Math.random()
+        r2 = Math.random()
+      } while (r1 + r2 > 1) // discard points outside of the triangle
+
+      v2.sub(v1).multiplyScalar(r1)
+      pos.sub(v1).multiplyScalar(r2).add(v2).add(v1)
+    }  
+  })()
+
+  const randomPointOnTriangleEdge = (function() {
+    let v1 = new THREE.Vector3()
+    let v2 = new THREE.Vector3()
+    let v3 = new THREE.Vector3()
+
+    return function randomPointOnTriangleEdge(vertices, pos) {
+      // assume each set of 3 vertices (each vertex has 3 floats) is a triangle
+      let triangleOffset = Math.floor(Math.random()*vertices.length/9)*9
+      v1.fromArray(vertices, triangleOffset)
+      v2.fromArray(vertices, triangleOffset + 3)
+      v3.fromArray(vertices, triangleOffset + 6)
+      r1 = Math.random()
+      if (r1 > 2/3) {
+        pos.copy(v1).sub(v3).multiplyScalar(r1*3 - 2).add(v3)
+      } else if (r1 > 1/3) {
+        pos.copy(v3).sub(v2).multiplyScalar(r1*3 - 1).add(v2)
+      } else {
+        pos.copy(v2).sub(v1).multiplyScalar(r1*3).add(v1)
+      }
+    }  
+  })()
 
   // based upon https://github.com/mrdoob/three.js/blob/master/src/renderers/shaders/ShaderLib/points_vert.glsl
   const particleVertexShader = `
