@@ -37,8 +37,9 @@
     rotation: "USE_PARTICLE_ROTATION",
     scale: "USE_PARTICLE_SCALE",
     velocity: "USE_PARTICLE_VELOCITY",
-    orbitalVelocity: "USE_ORBITAL",
-    orbitalAcceleration: "USE_ORBITAL",
+    orbitalVelocity: "USE_PARTICLE_ORBITAL",
+    orbitalAcceleration: "USE_PARTICLE_ORBITAL",
+    velocityScale: "USE_PARTICLE_VELOCITY_SCALE",
   }
 
   // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
@@ -110,6 +111,7 @@
       textureFrame: { type: "vec2", default: {x: 1, y: 1} },
       textureCount: { type: "int", default: 0 },
       textureLoop: { default: 1 },
+      emitterColor: { type: "color" },
 
       lifeTime: { default: "1" },
       position: { default: "0 0 0" },
@@ -127,12 +129,14 @@
       color: { default: "white", parse: toLowerCase },
       rotation: { default: "0" }, // if rotating textureFrames important to have enough space so overlapping parts of frames are blank (circle of sqrt(2) around the center of the frame will be viewable while rotating)
       opacity: { default: "1" },
+      velocityScale: { default: 0 },
+      velocityScaleMinMax: { type: "vec2", default: {x: 0, y: 3} },
 
       enable: { default: true },
       model: { type: "selector" },
       direction: { default: "forward", oneOf: ["forward", "backward"] },
       alphaTest: { default: 0 }, 
-      fog: { default: false },
+      fog: { default: true },
       depthWrite: { default: false },
       depthTest: { default: true },
       blending: { default: "normal", oneOf: ["none", "normal", "additive", "subtractive", "multiply"], parse: toLowerCase },
@@ -166,6 +170,8 @@
       this.colorOverTime // color is xyz and opacity is w. created in update()
       this.rotationScaleOverTime // x is rotation, y is scale. created in update()
       this.params = new Float32Array(4*3).fill(0) // see _PARAM constants
+      this.velocityScale = new Float32Array(3).fill(0) // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
+      this.emitterColor = new THREE.Vector3() // use vec3 for color
       this.nextID = 0
       this.nextTime = 0
       this.relative = this.data.relative // cannot be changed at run-time
@@ -209,6 +215,10 @@
       this.textureFrames[2] = data.textureCount > 0 ? data.textureCount : data.textureFrame.x * data.textureFrame.y
       this.textureFrames[3] = data.textureLoop
 
+      this.velocityScale[0] = data.velocityScale
+      this.velocityScale[1] = data.velocityScaleMinMax.x
+      this.velocityScale[2] = data.velocityScaleMinMax.y
+
       if (this.material) {
         this.material.alphaTest = data.alphaTest
         this.material.depthTest = data.depthTest
@@ -224,6 +234,11 @@
 
       if (this.mesh && data.frustumCulled !== oldData.frustumCulled) {
         this.mesh.frustumCulled = data.frustumCulled
+      }
+
+      if (data.emitterColor !== oldData.emitterColor) {
+        const col = new THREE.Color(data.emitterColor)
+        this.emitterColor.set(col.r, col.g, col.b)
       }
 
       if (data.position !== oldData.position || data.radialPosition !== oldData.radialPosition) {
@@ -397,9 +412,13 @@
           orbital: { value: this.orbital },
           colorOverTime: { value: this.colorOverTime },
           rotationScaleOverTime: { value: this.rotationScaleOverTime },
+          velocityScale: { value: this.velocityScale },
+          emitterColor: { value: this.emitterColor },
 
-          emitterColor: { value: new THREE.Vector3(1,1,1) },
-          emitterOpacity: { value: 1 },
+          fogDensity: { value: 0.00025 },
+          fogNear: { value: 1 },
+          fogFar: { value: 2000 },
+          fogColor: { value: new THREE.Color( 0xffffff ) }
         },
 
         fragmentShader: particleFragmentShader,
@@ -898,10 +917,11 @@ uniform vec2 orbital[2];
 uniform vec4 colorOverTime[OVER_TIME_ARRAY_LENGTH];
 uniform vec2 rotationScaleOverTime[OVER_TIME_ARRAY_LENGTH];
 uniform vec4 textureFrames;
+uniform vec3 velocityScale;
 
 varying vec4 vParticleColor;
 varying float vAgeRatio;
-varying float vRotation;
+varying vec2 vCosSinRotation;
 
 // each call to random will produce a different result by varying randI
 float randI = 0.0;
@@ -1127,9 +1147,10 @@ void main() {
     ANGLE_RANGE[0] = vec2( 0.0, 0.0 ) * radialDir;
     ANGLE_RANGE[1] = vec2( 2.0*PI, 2.0*PI ) * radialDir;
 
-    vec3 p = vec3(0.0);
-    vec3 v = vec3(0.0);
-    vec3 av = vec3(0.0);
+    vec3 p = vec3(0.0); // position
+    vec3 v = vec3(0.0); // velocity
+    vec3 av = vec3(0.0); // angular velocity
+    float ov = 0.0; // orbital velocity
 
 #if defined(USE_PARTICLE_OFFSET)
     p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
@@ -1178,38 +1199,78 @@ void main() {
     transformed = p + v*age;
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-    // vec3 rotationalVelocity = ( va + 0.5*aa*age );
-    vec4 angularQuaternion = eulerToQuaternion( av * age );
-
-    // vec3 velocity = ( v + v2 + 0.5*( a + a2 )*age );
-
-    transformed = applyQuaternion( transformed, angularQuaternion );
+    transformed = applyQuaternion( transformed, eulerToQuaternion( av * age ) );
 #endif
 
-#if defined(USE_ORBITAL)
-    float ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
-    float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
-    float angle = (ov + oa*0.5*age)*age;
+#if defined(USE_PARTICLE_ORBITAL)
+    vec3 axis = vec3(1.0, 0.0, 0.0);
 
-    // if p is (0,0,0) then transformed will not change
-    vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p
-    vec3 axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
-
-    transformed = applyQuaternion( transformed, axisAngleToQuaternion( axis, angle ) );
+    if (length(p) > 0.0001) {
+      ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
+      float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
+      ov += oa*0.5*age;
+  
+      float angle = ov*age;
+  
+      vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p or 0,0,0
+      axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
+  
+      transformed = applyQuaternion( transformed, axisAngleToQuaternion( axis, angle ) );
+    }
 #endif
 
+    vec2 rotScale = calcRotationScaleOverTime( vAgeRatio, seed );
+
+    particleScale = rotScale.y;
+    vParticleColor = calcColorOverTime( vAgeRatio, seed ); // rgba format
+
+    float c = cos( rotScale.x );
+    float s = sin( rotScale.x );
+
+#if defined(USE_PARTICLE_VELOCITY_SCALE)
+    // we'll calculate the screen space velocity by determining the particle movement
+    // between now and futureT. We use a reasonably small future T to give better
+    // results for the angular and orbital motion.
+
+    float futureT = 0.1;
+    vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
+    vec3 transformedFuture = transformed + v*futureT;
+
+#if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
+    transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( av*futureT ) );
+#endif
+
+#if defined(USE_PARTICLE_ORBITAL)
+    transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, ov*futureT ) );
+#endif
+
+    vec4 pos2DFuture = projectionMatrix * modelViewMatrix * vec4( transformedFuture, 1.0 );
+    vec2 screen = pos2DFuture.xy / pos2DFuture.z - pos2D.xy / pos2D.z; // TODO divide by 0?
+    screen /= futureT; // gives screen units per second
+
+    float lenScreen = length( screen );
+    vec2 sinCos = vec2(screen.x, screen.y)/max( 0.001, lenScreen); // 0 degrees is y == 1, x == 0
+    float c2 = c*sinCos.y + s*sinCos.x; // cos(a-b)
+    float s2 = s*sinCos.y - c*sinCos.x; // sin(a-b)
+
+    // replace rotation with our new rotation
+    c = c2;
+    s = s2;
+
+    // rescale the particle length by the z depth, because perspective will be applied later
+    float screenScale = clamp( lenScreen * pos2D.z * velocityScale.x, velocityScale.y, velocityScale.z );
+    // float screenScale = lenScreen*pos2D.z;
+
+    particleScale *= screenScale; 
+#endif
+
+    vCosSinRotation = vec2( c, s );
 
 #if defined(WORLD_RELATIVE)
     transformed = applyQuaternion( transformed, quaternion );
 #endif
 
     transformed += position;
-
-    vec2 rotScale = calcRotationScaleOverTime( vAgeRatio, seed );
-
-    particleScale = rotScale.y;
-    vParticleColor = calcColorOverTime( vAgeRatio, seed ); // rgba format
-    vRotation = rotScale.x;
   }
 
   #include <color_vertex>
@@ -1238,13 +1299,12 @@ void main() {
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
-uniform vec3 emitterColor;
-uniform float emitterOpacity;
 uniform vec4 textureFrames;
+uniform vec3 emitterColor;
 
 varying vec4 vParticleColor;
 varying float vAgeRatio;
-varying float vRotation;
+varying vec2 vCosSinRotation;
 
 void main() {
   if ( vAgeRatio < 0.0 || vAgeRatio > 1.0 ) {
@@ -1254,19 +1314,18 @@ void main() {
   #include <clipping_planes_fragment>
 
   vec3 outgoingLight = vec3( 0.0 );
-  vec4 diffuseColor = vec4( emitterColor, emitterOpacity );
+  vec4 diffuseColor = vec4( emitterColor, 1.0 );
   mat3 uvTransform = mat3(1.0);
 
-#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES)
+#if defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
   {
     vec2 invTextureFrame = 1.0 / textureFrames.xy;
     float textureCount = textureFrames.z;
     float textureLoop = textureFrames.w;
   
     float frame = floor( mod( vAgeRatio * textureCount * textureLoop, textureCount ) );
-    float angle = vRotation;
-    float c = cos(vRotation);
-    float s = sin(vRotation);
+    float c = vCosSinRotation.x;
+    float s = vCosSinRotation.y;
     float tx = mod( frame, textureFrames.x ) * invTextureFrame.x;
     float ty = (textureFrames.y - 1.0 - floor( frame * invTextureFrame.x )) * invTextureFrame.y; // assumes textures are flipped on y
     float sx = invTextureFrame.x;

@@ -61,11 +61,13 @@ The list of properties in alphabetical order:
 
 **editorObject** - if true, generate a bounding box called "mesh" which helps selecting and provides a selection box in the editor (*boolean*) default true
 
+**emitterColor** - overall color for the emitter. It is cheaper to set the emitter color than using *color* to color each particle, although the emitter color is a single color (*color*) default white
+
 **enable** - enable or disable the emitter. existing particles will continue their lives, but there will be no new particles (*boolean*) default true
 
 **enableInEditor** - if true, the particle system will run while the AFrame Inspector is active (*boolean*) default false
 
-**fog** - if true, apply fog to all particles (*boolean*) default false
+**fog** - if true, apply fog to all particles (*boolean*) default true
 
 **frustumCulled** - if false then always render the particle system. This is useful for world relative systems that move a lot because the bounds of the particle system are only around the current position, and not all past positions (*boolean*) default true
 
@@ -117,6 +119,11 @@ The list of properties in alphabetical order:
 
 **usePerspective** - if true, particles will become smaller the further they are from the camera (*boolean*) default true
 
+**velocityScale** - scale and rotate each particle according to it's screen-space velocity. The velocityScale is a multiplier of the particle's screen-space speed, so the higher the number the larger the particle will appear. 
+The texture is not rotated if the particles are travelling up the screen.
+
+**velocityScaleMinMax** - this sets the mix and max scaling for all particles when **velocityScale** is applied. This is useful for limiting the scaling on fast moving particles. The first value is the minimum scale, and the last value the maximum scale (*vec2*) default 0 3
+
 
 ## Limitations
 
@@ -140,3 +147,5 @@ If the a-entity containing the particle system also contains some other geometry
 The shader used for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes at run-time (attributes can still be changed in the Inspector). However there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
+
+The **velocityScale** is a very crude 3D approximation on a 2D camera facing billboard, so it may look odd when viewed extremely closely, or when the particle systems are very thing The scale is only a single value so it applies equal in both x and y in screen space
