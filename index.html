@@ -139,6 +139,11 @@
           <a-entity sprite-particles="texture: #blob; spawnRate: 20; lifeTime: 6; radialPosition: 1; angularVelocity: 300 0 0; color: red,black"></a-entity>
           <a-text value="angular" mixin="label"></a-text>
         </a-entity>
+        <a-entity position="-12 -8 0">
+          <a-entity sprite-particles__1="texture: #arrow; spawnRate: 20; lifeTime: 1; radialType: sphere; radialAcceleration: 10; emitterColor: purple; drag: 1; velocityScale: 1; scale: 2"
+                    sprite-particles__2="texture: #blob; spawnRate: 6; lifeTime: 4; position: -1.4 1 0..-1 1 0; velocity: 0 -1.1 0; emitterColor: goldenrod; drag: 1; opacity: 1,0"></a-entity>
+          <a-text value="drag" mixin="label"></a-text>
+        </a-entity>
         <a-entity position="4 -8 0">
           <a-entity sprite-particles="texture: #tree; spawnRate: 0.3; spawnType: burst; lifeTime: 1000; position: -1 -1 0..1 1 0; color: orange..red; scale: 2.5..3.5"></a-entity>
           <a-text value="fixed" mixin="label"></a-text>
@@ -159,6 +164,10 @@
         <a-entity position="12 0 0">
           <a-entity position="0 0.5 0" sprite-particles="texture: #arrow; spawnRate: 100; lifeTime: 0.7; radialVelocity: 1; radialAcceleration: 2; acceleration: 0 -5 -2; velocityScale: 1; emitterColor: green"></a-entity>
           <a-text value="velocityScale" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="12 -4 0">
+          <a-entity position="0 0.5 0" sprite-particles="texture: #arrow; spawnRate: 100; lifeTime: 0.7; radialVelocity: 1; radialAcceleration: 2; acceleration: 0 -5 -2; emitterColor: green"></a-entity>
+          <a-text value="no velocityScale" mixin="label"></a-text>
         </a-entity>
       </a-entity>
     </a-scene>

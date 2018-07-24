@@ -57,6 +57,8 @@ The list of properties in alphabetical order:
 
 **direction** - the direction to play the particle effect. if playing backward the particle will start at the end of its maximum age and then get younger (*forward, backward*) default forward
 
+**drag** - slows particles as they age.  0, is no drag; 1 is full drag, and will continually slow the particle, finally stopping when it reaches it's halfway point (*number*) default 0
+
 **duration** - no new particles will be generated after this time in seconds. if negative, particles are generated forever. changing the duration will restart the particle system (*number*) default -1
 
 **editorObject** - if true, generate a bounding box called "mesh" which helps selecting and provides a selection box in the editor (*boolean*) default true
@@ -120,9 +122,9 @@ The list of properties in alphabetical order:
 **usePerspective** - if true, particles will become smaller the further they are from the camera (*boolean*) default true
 
 **velocityScale** - scale and rotate each particle according to it's screen-space velocity. The velocityScale is a multiplier of the particle's screen-space speed, so the higher the number the larger the particle will appear. 
-The texture is not rotated if the particles are travelling up the screen.
+The texture is not rotated if the particles are travelling up the screen. Velocity scaling is only active when the value is greater than 0 (*number*) default 0
 
-**velocityScaleMinMax** - this sets the mix and max scaling for all particles when **velocityScale** is applied. This is useful for limiting the scaling on fast moving particles. The first value is the minimum scale, and the last value the maximum scale (*vec2*) default 0 3
+**velocityScaleMinMax** - this sets the mix and max scaling for all particles when **velocityScale** is applied. This is useful for limiting the scaling on fast moving particles. The first value is the minimum scale, and the last value the maximum scale. Velocity scaling is only active when the **velocityScale** is greater than 0 (*vec2*) default 0 3
 
 
 ## Limitations
@@ -148,4 +150,4 @@ The shader used for the particles is optimised to use only the code required for
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
 
-The **velocityScale** is a very crude 3D approximation on a 2D camera facing billboard, so it may look odd when viewed extremely closely, or when the particle systems are very thing The scale is only a single value so it applies equal in both x and y in screen space
+The **velocityScale** is a very crude 3D approximation on a 2D camera facing billboard, so it may look odd when viewed extremely closely, or when the particle systems are very thin. The particle systems uses Points, which only have a single scale value so it applies equal in both x and y in screen space. VelocityScaling will only be active if either the **velocityScale** or **velocityScaleMinMax** attribute is defined in the component, and the **velocityScale** is greater than 0.

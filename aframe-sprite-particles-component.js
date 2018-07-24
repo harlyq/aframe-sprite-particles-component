@@ -13,7 +13,8 @@
   const PARTICLE_COUNT_PARAM = 7 // [1].w
   const PARTICLE_SIZE_PARAM =  8 // [2].x
   const USE_PERSPECTIVE_PARAM = 9 // [2].y
-  const DIRECTION_PARAM = 10 // [2].x
+  const DIRECTION_PARAM = 10 // [2].z
+  const DRAG_PARAM = 11 // [2].w
 
   const MODEL_MESH = "mesh"
 
@@ -39,7 +40,7 @@
     velocity: "USE_PARTICLE_VELOCITY",
     orbitalVelocity: "USE_PARTICLE_ORBITAL",
     orbitalAcceleration: "USE_PARTICLE_ORBITAL",
-    velocityScale: "USE_PARTICLE_VELOCITY_SCALE",
+    drag: "USE_PARTICLE_DRAG",
   }
 
   // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
@@ -131,6 +132,7 @@
       opacity: { default: "1" },
       velocityScale: { default: 0 },
       velocityScaleMinMax: { type: "vec2", default: {x: 0, y: 3} },
+      drag: { default: 0 },
 
       enable: { default: true },
       model: { type: "selector" },
@@ -159,7 +161,7 @@
       this.overTimeArrayLength = 0
       this.emitterTime = 0
       this.lifeTime = [1,1]
-      this.useTransparent = false
+      // this.useTransparent = false
       this.textureFrames = new Float32Array(4) // xy is TextureFrame, z is TextureCount, w is TextureLoop
       this.offset = new Float32Array(4*2).fill(0) // xyz is position, w is radialPosition
       this.velocity = new Float32Array(4*2).fill(0) // xyz is velocity, w is radialVelocity
@@ -209,6 +211,7 @@
       this.params[USE_PERSPECTIVE_PARAM] = data.usePerspective ? 1 : 0
       this.params[RADIAL_PARAM] = data.radialType === "circle" ? 0 : 1
       this.params[DIRECTION_PARAM] = data.direction === "forward" ? 0 : 1
+      this.params[DRAG_PARAM] = THREE.Math.clamp(data.drag, 0, 1)
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -481,7 +484,7 @@
       for (let i = 0, k = 4; i < n; i++, k += 4) {
         let alpha = opacity[i]
         this.colorOverTime[k+3] = alpha // glsl colorOverTime[1..].w
-        this.useTransparent = this.useTransparent || alpha < 1
+        // this.useTransparent = this.useTransparent || alpha < 1
       }
     },
 
@@ -681,6 +684,10 @@
 
       if (this.relative === "world") {
         defines.WORLD_RELATIVE = true
+      }
+
+      if (this.data.velocityScale > 0) {
+        defines.USE_PARTICLE_VELOCITY_SCALE = true
       }
 
       const extraDefines = Object.keys(defines).filter(b => this.material.defines[b] !== defines[b])
@@ -1092,6 +1099,7 @@ void main() {
   float loopTime = vertexCount / spawnRate;
   float age = -1.0;
   float seed = 0.0;
+  float lifeTime = 0.0;
 
   // the CPU manages IDs if it sets the position or disables particles, otherwise cpuID is -1
   float ID0 = cpuID > 0.0 ? cpuID : floor( mod( time, maxAge ) * spawnRate ); // this will lose precision eventually
@@ -1130,7 +1138,7 @@ void main() {
       age = age + direction * ( loopTime - 2.0 * age );
     }
 
-    float lifeTime = randFloatRange( angularVelocity[0].w, maxAge, seed );
+    lifeTime = randFloatRange( angularVelocity[0].w, maxAge, seed );
 
     // the vAgeRatio will be used for the lerps on over-time attributes
     vAgeRatio = age/lifeTime;
@@ -1141,6 +1149,12 @@ void main() {
 
   if ( vAgeRatio >= 0.0 && vAgeRatio < 1.0 )
   {
+  #if defined(USE_PARTICLE_DRAG)
+    // simulate drag by blending the age to (1-0.5*drag)*lifeTime
+    float drag = params[2].w;
+    age = mix( 0.5*drag*vAgeRatio, 1.0 - 0.5*drag, vAgeRatio ) * lifeTime;
+  #endif
+
     vec2 radialDir = vec2( 1.0, radialType );
 
     vec2 ANGLE_RANGE[2];
@@ -1229,10 +1243,18 @@ void main() {
 
 #if defined(USE_PARTICLE_VELOCITY_SCALE)
     // we'll calculate the screen space velocity by determining the particle movement
-    // between now and futureT. We use a reasonably small future T to give better
-    // results for the angular and orbital motion.
+    // between now and velocityScaleDelta. We use a reasonably small velocityScaleDelta 
+    // to give better results for the angular and orbital motion. When drag is applied
+    // the velocity effectively tends to 0 as the ageRatio increases
 
-    float futureT = 0.1;
+    float velocityScaleDelta = 0.1;
+
+#if defined(USE_PARTICLE_DRAG)
+    float futureT = velocityScaleDelta*mix(1.0, 1.0 - drag, vAgeRatio);
+#else
+    float futureT = velocityScaleDelta;
+#endif
+
     vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
     vec3 transformedFuture = transformed + v*futureT;
 
@@ -1246,7 +1268,7 @@ void main() {
 
     vec4 pos2DFuture = projectionMatrix * modelViewMatrix * vec4( transformedFuture, 1.0 );
     vec2 screen = pos2DFuture.xy / pos2DFuture.z - pos2D.xy / pos2D.z; // TODO divide by 0?
-    screen /= futureT; // gives screen units per second
+    screen /= velocityScaleDelta; // gives screen units per second
 
     float lenScreen = length( screen );
     vec2 sinCos = vec2(screen.x, screen.y)/max( 0.001, lenScreen); // 0 degrees is y == 1, x == 0
