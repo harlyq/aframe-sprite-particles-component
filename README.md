@@ -83,7 +83,7 @@ The list of properties in alphabetical order:
 
 **opacity** - over-time ranges for the particle opacity. `0` is transparent, `1` is opaque (*number range array*) default 1
 
-**overTimeSlots** - maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed at run-time) (*int*) default 5
+**overTimeSlots** - maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed after creation) (*int*) default 5
 
 **particleSize** - the size of each particle in pixels. if **usePerspective** is `true` then this is the size of the particle at 1m from the camera (*number*) default 100
 
@@ -97,7 +97,7 @@ The list of properties in alphabetical order:
 
 **radialVelocity** - range for a radial speed from the local origin (*number range*) default 0
 
-**relative** - if local, all particles move relative to the entity. if world, new particles are spawned at the current entity position, but spawned particles are not affected by the entities' movement (cannot be changed at run-time) (*world, local*) default local
+**relative** - if local, all particles move relative to the entity. if world, new particles are spawned at the current entity position, but spawned particles are not affected by the entities' movement (cannot be changed after creation) (*world, local*) default local
 
 **rotation** - over-time ranges for the particle rotation counterclockwise about the XY plane. all rotations are from min range to max range, and in degrees (*number range array*) default 0
 
@@ -116,6 +116,10 @@ The list of properties in alphabetical order:
 **textureFrame** - the number of columns (x) and rows (y) for this texture (*vec2*) default 1 1
 
 **textureLoop** - the number of times to loop the texture over the lifetime of the particle (*number*) default 1
+
+**trailInterval** - generate trails after particles.  If active, the lead particle but will not change over time, but every **timeInterval** seconds it will drop a particle which will remain stationary and follow the over-time properties. Trails are deactivated if this value if 0 (*number*) default 0
+
+**trailLifeTime** - range value determining the age of each trail.  If this value is 0, then the trail life time is equal to the **lifeTime** attribute.  Trails only appear if **timeInterval** is larger than 0 (*number range*) default 0
 
 **transparent** - set to true to make the alpha channel of the texture transparent (*boolean*) default true
 
@@ -146,8 +150,12 @@ be the id name followed by the attribute name e.g. "box_sprite-particles" or "bo
 
 If the a-entity containing the particle system also contains some other geometry, then **editorObject** will do nothing because we won't override the other geometry.
 
-The shader used for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes at run-time (attributes can still be changed in the Inspector). However there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).
+The shader for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes after creation (attributes can still be changed in the Inspector). However, there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
 
 The **velocityScale** is a very crude 3D approximation on a 2D camera facing billboard, so it may look odd when viewed extremely closely, or when the particle systems are very thin. The particle systems uses Points, which only have a single scale value so it applies equal in both x and y in screen space. VelocityScaling will only be active if either the **velocityScale** or **velocityScaleMinMax** attribute is defined in the component, and the **velocityScale** is greater than 0.
+
+When particle trails are active, each particle will also spawn trail particles every **trailInterval** seconds, which live for **trailLifeTime** seconds. When particle trails are active, the lead particle follows the motion specified in the particle component, but does not change over time (i.e. ignores **color**, **rotation**, **opacity**, **scale** and textureFrames stay on the first frame). When the trails are spawned they ignore all particle motion, but implement the change over time rules. Visually this looks like each particle is leaving a trail behind it.  The trails will continue to exist even when the main particle has expired.
+
+When trails are active the effective lifespan of a particle is **lifeTime** plus **trailLifeTime**, so when **spawnType** is `burst`, there will be `spawnRate * (lifeTime + trailLifeTime)` particles spawned.
