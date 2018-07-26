@@ -859,8 +859,8 @@
           }
 
           if (isWorldRelative || isUsingModel) {
-            // particlePosition.updateRange.offset = startID
-            // particlePosition.updateRange.count = numSpawned
+            particlePosition.updateRange.offset = startID
+            particlePosition.updateRange.count = numSpawned
             particlePosition.needsUpdate = true
           }
 
@@ -938,11 +938,11 @@
   // based upon https://github.com/mrdoob/three.js/blob/master/src/renderers/shaders/ShaderLib/points_vert.glsl
   const particleVertexShader = `
 #include <common>
-#include <color_pars_vertex>
+// #include <color_pars_vertex>
 #include <fog_pars_vertex>
-#include <morphtarget_pars_vertex>
-#include <logdepthbuf_pars_vertex>
-#include <clipping_planes_pars_vertex>
+// #include <morphtarget_pars_vertex>
+// #include <logdepthbuf_pars_vertex>
+// #include <clipping_planes_pars_vertex>
 
 attribute float vertexID;
 
@@ -1153,230 +1153,222 @@ void main() {
 
   vOverTimeRatio = -1.0; // the vOverTimeRatio will be used for the lerps on over-time attributes
 
-  // if ID is less than 0, then this particle is disabled
-  if (vertexID >= 0.0) {
+  // particles are either emitted in a burst (spawnType == 0) or spread evenly
+  // throughout 0..loopTime (spawnType == 1).  We calculate the ID of the last spawned particle ID0 
+  // for this frame, any vertex IDs after ID0 are assumed to belong to the previous loop
 
-    // particles are either emitted in a burst (spawnType == 0) or spread evenly
-    // throughout 0..loopTime (spawnType == 1).  We calculate the ID of the last spawned particle ID0 
-    // for this frame, any vertex IDs after ID0 are assumed to belong to the previous loop
-  
-    // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
-    float particleID = floor( vertexID/trailCount );
+  // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
+  float particleID = floor( vertexID/trailCount );
 
-    float loop = floor( time / loopTime ) - spawnType * (particleID > ID0 ? 1.0 : 0.0);
-    float particleStartTime = loop * loopTime + particleID / spawnRate * spawnType;
+  float loop = floor( time / loopTime ) - spawnType * (particleID > ID0 ? 1.0 : 0.0);
+  float particleStartTime = loop * loopTime + particleID / spawnRate * spawnType;
 
-    if (particleStartTime >= 0.0)
-    {
-      // we use the id as a seed for the randomizer, but because the IDs are fixed in 
-      // the range 0..particleCount we calculate a virtual ID by taking into account
-      // the number of loops that have occurred (note, particleIDs above ID0 are assumed 
-      // to be in the previous loop).  We use the modoulo of the RANDOM_REPEAT_COUNT to
-      // ensure that the virtualID doesn't exceed the floating point precision
-    
-      float virtualID = mod( particleID + loop * particleCount, float( RANDOM_REPEAT_COUNT ) );
-      seed = mod( 1664525.*virtualID*baseSeed*110. + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
-  
-      particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
+  // we use the id as a seed for the randomizer, but because the IDs are fixed in 
+  // the range 0..particleCount we calculate a virtual ID by taking into account
+  // the number of loops that have occurred (note, particleIDs above ID0 are assumed 
+  // to be in the previous loop).  We use the modoulo of the RANDOM_REPEAT_COUNT to
+  // ensure that the virtualID doesn't exceed the floating point precision
 
-      float particleAge = time - particleStartTime;
-      particleAge = particleAge + direction * ( loopTime - 2.0 * particleAge );
-  
-      // don't show particles that would be emitted after the duration
-      if ( duration > 0.0 && time - particleAge >= duration ) 
-      {
-        particleAge = -1.0;
-      } 
+  float virtualID = mod( particleID + loop * particleCount, float( RANDOM_REPEAT_COUNT ) );
+  seed = mod( 1664525.*virtualID*baseSeed*110. + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
 
-      if (particleAge > 0.0) 
-      {
+  particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
+
+  float particleAge = time - particleStartTime;
+  particleAge = particleAge + direction * ( loopTime - 2.0 * particleAge );
+
+  // don't show particles that would be emitted after the duration
+  if ( duration > 0.0 && time - particleAge >= duration ) 
+  {
+    particleAge = -1.0;
+  } 
 
 #if defined(USE_PARTICLE_TRAILS)
-        // the first trail starts after trailInterval seconds
-        float trailID = mod( vertexID, trailCount );
-        float trailLoopTime = trailCount * trailInterval;
-        float trailID0 = floor( mod( particleAge, trailLoopTime ) / trailInterval ); // this will be larger than trailCount when maxTrailLifeTime is large
-        float trailLoop = floor( particleAge / trailLoopTime - (trailID > trailID0 ? 1.0 : 0.0));
-        float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval + trailInterval;
-  
-        if (trailStartAge >= 0.0 && trailStartAge < particleLifeTime + trailInterval)
-        {
-          float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
-    
-          if (particleAge >= 0.0 && particleAge < trailStartAge)
-          {
-            motionAge = particleAge;
-            vOverTimeRatio = 0.0;
-          }
-          else if (particleAge < trailStartAge + trailLifeTime)
-          {
-            motionAge = trailStartAge;
-            vOverTimeRatio = (particleAge - trailStartAge)/trailLifeTime;
-          }
-        }
-#else
-        motionAge = particleAge;
-        vOverTimeRatio = particleAge/particleLifeTime;
-#endif
-  
-      }
+  // the first trail starts after trailInterval seconds
+  float trailID = mod( vertexID, trailCount );
+  float trailLoopTime = trailCount * trailInterval;
+  float trailID0 = floor( mod( particleAge, trailLoopTime ) / trailInterval ); // this will be larger than trailCount when maxTrailLifeTime is large
+  float trailLoop = floor( particleAge / trailLoopTime - (trailID > trailID0 ? 1.0 : 0.0));
+  float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval + trailInterval;
+
+  if (trailStartAge >= 0.0 && trailStartAge < particleLifeTime + trailInterval)
+  {
+    float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
+
+    if (particleAge >= 0.0 && particleAge < trailStartAge)
+    {
+      motionAge = particleAge;
+      vOverTimeRatio = 0.0;
     }
+    else if (particleAge < trailStartAge + trailLifeTime)
+    {
+      motionAge = trailStartAge;
+      vOverTimeRatio = (particleAge - trailStartAge)/trailLifeTime;
+    }
+  }
+#else
+  motionAge = particleAge;
+  vOverTimeRatio = particleAge/particleLifeTime;
+#endif
+
+  // these checks were around large blocks of code above, but this caused instability
+  // in some of the particle systems, so instead we do all of the work, then cancel 
+  // it out here
+  if ( particleStartTime < 0.0 || vertexID < 0.0 )
+  {
+    vOverTimeRatio = -1.0;
   }
 
   vec3 transformed = vec3(0.0);
   float particleScale = 1.0;
 
-  if ( vOverTimeRatio >= 0.0 && vOverTimeRatio < 1.0 )
-  {
-  #if defined(USE_PARTICLE_DRAG)
-    // simulate drag by blending the motionAge to (1-0.5*drag)*particleLifeTime
-    float drag = params[2].w;
-    motionAge = mix( 0.5*drag*vOverTimeRatio, 1.0 - 0.5*drag, vOverTimeRatio ) * particleLifeTime;
-  #endif
+#if defined(USE_PARTICLE_DRAG)
+  // simulate drag by blending the motionAge to (1-0.5*drag)*particleLifeTime
+  float drag = params[2].w;
+  motionAge = mix( 0.5*drag*vOverTimeRatio, 1.0 - 0.5*drag, vOverTimeRatio ) * particleLifeTime;
+#endif
 
-    vec2 radialDir = vec2( 1.0, radialType );
+  vec2 radialDir = vec2( 1.0, radialType );
 
-    vec2 ANGLE_RANGE[2];
-    ANGLE_RANGE[0] = vec2( 0.0, 0.0 ) * radialDir;
-    ANGLE_RANGE[1] = vec2( 2.0*PI, 2.0*PI ) * radialDir;
+  vec2 ANGLE_RANGE[2];
+  ANGLE_RANGE[0] = vec2( 0.0, 0.0 ) * radialDir;
+  ANGLE_RANGE[1] = vec2( 2.0*PI, 2.0*PI ) * radialDir;
 
-    vec3 p = vec3(0.0); // position
-    vec3 v = vec3(0.0); // velocity
-    vec3 av = vec3(0.0); // angular velocity
-    float ov = 0.0; // orbital velocity
+  vec3 p = vec3(0.0); // position
+  vec3 v = vec3(0.0); // velocity
+  vec3 av = vec3(0.0); // angular velocity
+  float ov = 0.0; // orbital velocity
 
 #if defined(USE_PARTICLE_OFFSET)
-    p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
+  p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
 #endif
 
 #if defined(USE_PARTICLE_VELOCITY)
-    v = randVec3Range( velocity[0].xyz, velocity[1].xyz, seed );
+  v = randVec3Range( velocity[0].xyz, velocity[1].xyz, seed );
 #endif
 
 #if defined(USE_PARTICLE_ACCELERATION)
-    vec3 a = randVec3Range( acceleration[0].xyz, acceleration[1].xyz, seed );
-    v += a*motionAge*0.5;
+  vec3 a = randVec3Range( acceleration[0].xyz, acceleration[1].xyz, seed );
+  v += a*motionAge*0.5;
 #endif
 
 #if defined(USE_PARTICLE_RADIAL_OFFSET) || defined(USE_PARTICLE_RADIAL_VELOCITY) || defined(USE_PARTICLE_RADIAL_ACCELERATION)
-    vec2 theta = randVec2Range( ANGLE_RANGE[0], ANGLE_RANGE[1], seed );
+  vec2 theta = randVec2Range( ANGLE_RANGE[0], ANGLE_RANGE[1], seed );
 #endif
 
 #if defined(USE_PARTICLE_RADIAL_OFFSET)
-    float pr = randFloatRange( offset[0].w, offset[1].w, seed );
-    vec3 p2 = radialToVec3( pr, theta );
-    p += p2;
+  float pr = randFloatRange( offset[0].w, offset[1].w, seed );
+  vec3 p2 = radialToVec3( pr, theta );
+  p += p2;
 #endif
 
 #if defined(USE_PARTICLE_RADIAL_VELOCITY)
-    float vr = randFloatRange( velocity[0].w, velocity[1].w, seed );
-    vec3 v2 = radialToVec3( vr, theta );
-    v += v2;
+  float vr = randFloatRange( velocity[0].w, velocity[1].w, seed );
+  vec3 v2 = radialToVec3( vr, theta );
+  v += v2;
 #endif
 
 #if defined(USE_PARTICLE_RADIAL_ACCELERATION)
-    float ar = randFloatRange( acceleration[0].w, acceleration[1].w, seed );
-    vec3 a2 = radialToVec3( ar, theta );
-    v += a2*motionAge*0.5;
+  float ar = randFloatRange( acceleration[0].w, acceleration[1].w, seed );
+  vec3 a2 = radialToVec3( ar, theta );
+  v += a2*motionAge*0.5;
 #endif
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY)
-    av = randVec3Range( angularVelocity[0].xyz, angularVelocity[1].xyz, seed );
+  av = randVec3Range( angularVelocity[0].xyz, angularVelocity[1].xyz, seed );
 #endif
 
 #if defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-    vec3 aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
-    av += aa*0.5*motionAge;
+  vec3 aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
+  av += aa*0.5*motionAge;
 #endif
 
-    transformed = p + v*motionAge;
+  transformed = p + v*motionAge;
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-    transformed = applyQuaternion( transformed, eulerToQuaternion( av * motionAge ) );
+  transformed = applyQuaternion( transformed, eulerToQuaternion( av * motionAge ) );
 #endif
 
 #if defined(USE_PARTICLE_ORBITAL)
-    vec3 axis = vec3(1.0, 0.0, 0.0);
+  vec3 axis = vec3(1.0, 0.0, 0.0);
 
-    if (length(p) > 0.0001) {
-      ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
-      float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
-      ov += oa*0.5*motionAge;
-  
-      float angle = ov*motionAge;
-  
-      vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p or 0,0,0
-      axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
-  
-      transformed = applyQuaternion( transformed, axisAngleToQuaternion( axis, angle ) );
-    }
+  if (length(p) > 0.0001) {
+    ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
+    float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
+    ov += oa*0.5*motionAge;
+
+    float angle = ov*motionAge;
+
+    vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p or 0,0,0
+    axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
+
+    transformed = applyQuaternion( transformed, axisAngleToQuaternion( axis, angle ) );
+  }
 #endif
 
-    vec2 rotScale = calcRotationScaleOverTime( vOverTimeRatio, seed );
+  vec2 rotScale = calcRotationScaleOverTime( vOverTimeRatio, seed );
 
-    particleScale = rotScale.y;
-    vParticleColor = calcColorOverTime( vOverTimeRatio, seed ); // rgba format
+  particleScale = rotScale.y;
+  vParticleColor = calcColorOverTime( vOverTimeRatio, seed ); // rgba format
 
-    float c = cos( rotScale.x );
-    float s = sin( rotScale.x );
+  float c = cos( rotScale.x );
+  float s = sin( rotScale.x );
 
 #if defined(USE_PARTICLE_VELOCITY_SCALE)
-    // we'll calculate the screen space velocity by determining the particle movement
-    // between now and velocityScaleDelta. We use a reasonably small velocityScaleDelta 
-    // to give better results for the angular and orbital motion. When drag is applied
-    // the velocity effectively tends to 0 as the ageRatio increases
+  // we'll calculate the screen space velocity by determining the particle movement
+  // between now and velocityScaleDelta. We use a reasonably small velocityScaleDelta 
+  // to give better results for the angular and orbital motion. When drag is applied
+  // the velocity effectively tends to 0 as the ageRatio increases
 
-    float velocityScaleDelta = 0.1;
+  float velocityScaleDelta = 0.1;
 
 #if defined(USE_PARTICLE_DRAG)
-    float futureT = velocityScaleDelta*mix(1.0, 1.0 - drag, vOverTimeRatio);
+  float futureT = velocityScaleDelta*mix(1.0, 1.0 - drag, vOverTimeRatio);
 #else
-    float futureT = velocityScaleDelta;
+  float futureT = velocityScaleDelta;
 #endif
 
-    vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
-    vec3 transformedFuture = transformed + v*futureT;
+  vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
+  vec3 transformedFuture = transformed + v*futureT;
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-    transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( av*futureT ) );
+  transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( av*futureT ) );
 #endif
 
 #if defined(USE_PARTICLE_ORBITAL)
-    transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, ov*futureT ) );
+  transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, ov*futureT ) );
 #endif
 
-    vec4 pos2DFuture = projectionMatrix * modelViewMatrix * vec4( transformedFuture, 1.0 );
-    vec2 screen = pos2DFuture.xy / pos2DFuture.z - pos2D.xy / pos2D.z; // TODO divide by 0?
-    screen /= velocityScaleDelta; // gives screen units per second
+  vec4 pos2DFuture = projectionMatrix * modelViewMatrix * vec4( transformedFuture, 1.0 );
+  vec2 screen = pos2DFuture.xy / pos2DFuture.z - pos2D.xy / pos2D.z; // TODO divide by 0?
+  screen /= velocityScaleDelta; // gives screen units per second
 
-    float lenScreen = length( screen );
-    vec2 sinCos = vec2(screen.x, screen.y)/max( 0.001, lenScreen); // 0 degrees is y == 1, x == 0
-    float c2 = c*sinCos.y + s*sinCos.x; // cos(a-b)
-    float s2 = s*sinCos.y - c*sinCos.x; // sin(a-b)
+  float lenScreen = length( screen );
+  vec2 sinCos = vec2(screen.x, screen.y)/max( 0.001, lenScreen); // 0 degrees is y == 1, x == 0
+  float c2 = c*sinCos.y + s*sinCos.x; // cos(a-b)
+  float s2 = s*sinCos.y - c*sinCos.x; // sin(a-b)
 
-    // replace rotation with our new rotation
-    c = c2;
-    s = s2;
+  // replace rotation with our new rotation
+  c = c2;
+  s = s2;
 
-    // rescale the particle length by the z depth, because perspective will be applied later
-    float screenScale = clamp( lenScreen * pos2D.z * velocityScale.x, velocityScale.y, velocityScale.z );
-    // float screenScale = lenScreen*pos2D.z;
+  // rescale the particle length by the z depth, because perspective will be applied later
+  float screenScale = clamp( lenScreen * pos2D.z * velocityScale.x, velocityScale.y, velocityScale.z );
 
-    particleScale *= screenScale; 
+  particleScale *= screenScale; 
 #endif
 
-    vCosSinRotation = vec2( c, s );
+  vCosSinRotation = vec2( c, s );
 
 #if defined(WORLD_RELATIVE)
-    transformed = applyQuaternion( transformed, quaternion );
+  transformed = applyQuaternion( transformed, quaternion );
 #endif
 
-    transformed += position;
-  }
+  transformed += position;
 
-  #include <color_vertex>
+  // #include <color_vertex>
   // #include <begin_vertex> replaced by code above
-  #include <morphtarget_vertex>
+  // #include <morphtarget_vertex>
   #include <project_vertex>
 
   float particleSize = params[2].x;
@@ -1384,9 +1376,9 @@ void main() {
 
   gl_PointSize = particleSize * particleScale * mix( 1.0, 1.0 / - mvPosition.z, usePerspective );
 
-  #include <logdepthbuf_vertex>
-  #include <clipping_planes_vertex>
-  #include <worldpos_vertex>
+  // #include <logdepthbuf_vertex>
+  // #include <clipping_planes_vertex>
+  // #include <worldpos_vertex>
   #include <fog_vertex>
 }`
 
@@ -1394,11 +1386,11 @@ void main() {
   const particleFragmentShader = `
 #include <common>
 #include <packing>
-#include <color_pars_fragment>
+// #include <color_pars_fragment>
 #include <map_particle_pars_fragment>
 #include <fog_pars_fragment>
-#include <logdepthbuf_pars_fragment>
-#include <clipping_planes_pars_fragment>
+// #include <logdepthbuf_pars_fragment>
+// #include <clipping_planes_pars_fragment>
 
 uniform vec4 textureFrames;
 uniform vec3 emitterColor;
@@ -1443,9 +1435,9 @@ void main() {
   }
 #endif
 
-  #include <logdepthbuf_fragment>
+  // #include <logdepthbuf_fragment>
   #include <map_particle_fragment>
-  #include <color_fragment>
+  // #include <color_fragment>
   #include <alphatest_fragment>
 
   diffuseColor *= vParticleColor;
@@ -1453,9 +1445,9 @@ void main() {
 
   gl_FragColor = vec4( outgoingLight, diffuseColor.a );
 
-  #include <premultiplied_alpha_fragment>
-  #include <tonemapping_fragment>
-  #include <encodings_fragment>
+  // #include <premultiplied_alpha_fragment>
+  // #include <tonemapping_fragment>
+  // #include <encodings_fragment>
   #include <fog_fragment>
 }`
 
