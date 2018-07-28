@@ -85,6 +85,8 @@ The list of properties in alphabetical order:
 
 **overTimeSlots** - maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed after creation) (*int*) default 5
 
+**particleOrder** - defines the draw order of particles, which can either be `newest` drawn last, `oldest` drawn last or `original` which uses a cylic buffer and reuses old particles so the draw order is indeterminant. The order applies to both particles and their trails. (*string*) default original
+
 **particleSize** - the size of each particle in pixels. if **usePerspective** is `true` then this is the size of the particle at 1m from the camera (*number*) default 100
 
 **position** - range for offseting the initial particle position in local coordinates (*vec3 range*) default 0 0 0
@@ -150,6 +152,8 @@ be the id name followed by the attribute name e.g. "box_sprite-particles" or "bo
 
 If the a-entity containing the particle system also contains some other geometry, then **editorObject** will do nothing because we won't override the other geometry.
 
+In the Inspector it is not possible to click on particle systems that are world relative, because they are attached to the scene element, rather than an a-entity.
+
 The shader for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes after creation (attributes can still be changed in the Inspector). However, there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
@@ -159,3 +163,5 @@ The **velocityScale** is a very crude 3D approximation on a 2D camera facing bil
 When particle trails are active, each particle will also spawn trail particles every **trailInterval** seconds, which live for **trailLifeTime** seconds. When particle trails are active, the lead particle follows the motion specified in the particle component, but does not change over time (i.e. ignores **color**, **rotation**, **opacity**, **scale** and textureFrames stay on the first frame). When the trails are spawned they ignore all particle motion, but implement the change over time rules. Visually this looks like each particle is leaving a trail behind it.  The trails will continue to exist even when the main particle has expired.
 
 When trails are active the effective lifespan of a particle is **lifeTime** plus **trailLifeTime**, so when **spawnType** is `burst`, there will be `spawnRate * (lifeTime + trailLifeTime)` particles spawned.
+
+The **particleOrder** is forced to `original` when **relative** is set to `world`. This is done to simplify the work on the CPU, so we just set the particle's position once when spawned.

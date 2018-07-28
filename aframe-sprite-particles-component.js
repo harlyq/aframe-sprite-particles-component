@@ -46,6 +46,8 @@
     drag: "USE_PARTICLE_DRAG",
   }
 
+  const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "original"]
+
   // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
   const flattenDeep = arr1 => arr1.reduce((acc, val) => Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val), [])
 
@@ -141,7 +143,8 @@
 
       enable: { default: true },
       model: { type: "selector" },
-      direction: { default: "forward", oneOf: ["forward", "backward"] },
+      direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
+      particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
       alphaTest: { default: 0 }, 
       fog: { default: true },
       depthWrite: { default: false },
@@ -188,6 +191,7 @@
       this.numDisabled = 0
       this.numEnabled = 0
       this.manageIDs = false
+      this.particleOrder = 'original' // sanitized version of data.particleOrder
 
       this.params[ID_PARAM] = -1 // unmanaged IDs
     },
@@ -288,7 +292,8 @@
       }
 
       if (data.trailLifeTime !== oldData.trailLifeTime) {
-        this.trailLifeTime = parseVecRange(data.trailLifeTime, [0]).map((x,i) => x > 0 ? x : this.lifeTime[i])
+        // if trailLifeTime is 0 then use the lifeTime values, and always ensure that trailLifeTime never exceeds the lifeTime
+        this.trailLifeTime = parseVecRange(data.trailLifeTime, [0]).map((x,i) => x > 0 ? Math.min(x, this.lifeTime[i]) : this.lifeTime[i])
         this["angularAcceleration"][3] = this.trailLifeTime[0] // angularAcceleration[0].w
         this["angularAcceleration"][7] = this.trailLifeTime[1] // angularAcceleration[1].w
       }
@@ -335,6 +340,12 @@
         if (oldData.model) { oldData.model.removeEventListener("object3dset", this.handleObject3DSet) }
         this.updateModelMesh(data.model.getObject3D(MODEL_MESH))
         if (data.model) { data.model.addEventListener("object3dset", this.handleObject3DSet) }
+      }
+
+      this.particleOrder = data.particleOrder
+      if (data.particleOrder !== "original" && data.relative === "world") {
+        console.warn(`changing particleOrder to 'original' (was '${data.particleOrder}'), because particles are world relative`)
+        this.particleOrder = "original"
       }
 
       if (!this.mesh) {
@@ -716,6 +727,8 @@
       if (this.data.trailInterval > 0) {
         defines.USE_PARTICLE_TRAILS = true
       }
+
+      defines.PARTICLE_ORDER = PARTICLE_ORDER_STRINGS.indexOf(this.particleOrder)
 
       const extraDefines = Object.keys(defines).filter(b => this.material.defines[b] !== defines[b])
 
@@ -1139,8 +1152,6 @@ void main() {
   float maxTrailLifeTime = angularAcceleration[1].w; // trailLifeTime packed into angularAcceleration.w
   float loopTime = particleCount / spawnRate;
   float motionAge = -1.0; // used to determine the age for particle movement
-  float seed = 0.0;
-  float particleLifeTime = 0.0;
 
 #if defined(USE_PARTICLE_TRAILS)
   float maxAge = maxParticleLifeTime + maxTrailLifeTime;
@@ -1149,30 +1160,41 @@ void main() {
 #endif
 
   // the CPU manages IDs if it sets the position or disables particles, otherwise cpuID is -1
-  float ID0 = cpuID > 0.0 ? cpuID : floor( mod( time, maxAge ) * spawnRate ); // this will lose precision eventually
+  float particleID0 = cpuID > 0.0 ? cpuID : floor( mod( time, maxAge ) * spawnRate ); // this will lose precision eventually
 
   vOverTimeRatio = -1.0; // the vOverTimeRatio will be used for the lerps on over-time attributes
 
   // particles are either emitted in a burst (spawnType == 0) or spread evenly
-  // throughout 0..loopTime (spawnType == 1).  We calculate the ID of the last spawned particle ID0 
-  // for this frame, any vertex IDs after ID0 are assumed to belong to the previous loop
+  // throughout 0..loopTime (spawnType == 1).  We calculate the ID of the last spawned particle particleID0 
+  // for this frame, any vertex IDs after particleID0 are assumed to belong to the previous loop
 
   // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
-  float particleID = floor( vertexID/trailCount );
+  float rawParticleID = floor( vertexID/trailCount );
 
-  float loop = floor( time / loopTime ) - spawnType * (particleID > ID0 ? 1.0 : 0.0);
+#if PARTICLE_ORDER == 0
+  float particleID = particleID0 - (particleCount - 1. - rawParticleID); // newest last
+#elif PARTICLE_ORDER == 1
+  float particleID = particleID0 - rawParticleID; // oldest last
+#else
+  float particleID = rawParticleID > particleID0 ? rawParticleID - particleCount : rawParticleID; // cyclic (original)
+#endif
+
+  // for burst mode we use the rawParticleID, because the concept of particleID0 is irrelevant
+  particleID = mix( rawParticleID, particleID, spawnType ); 
+
+  float loop = floor( time / loopTime );
   float particleStartTime = loop * loopTime + particleID / spawnRate * spawnType;
 
   // we use the id as a seed for the randomizer, but because the IDs are fixed in 
   // the range 0..particleCount we calculate a virtual ID by taking into account
-  // the number of loops that have occurred (note, particleIDs above ID0 are assumed 
+  // the number of loops that have occurred (note, particleIDs above particleID0 are assumed 
   // to be in the previous loop).  We use the modoulo of the RANDOM_REPEAT_COUNT to
   // ensure that the virtualID doesn't exceed the floating point precision
 
   float virtualID = mod( particleID + loop * particleCount, float( RANDOM_REPEAT_COUNT ) );
-  seed = mod( 1664525.*virtualID*baseSeed*110. + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
+  float seed = mod( 1664525.*virtualID*baseSeed*110. + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
 
-  particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
+  float particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
 
   float particleAge = time - particleStartTime;
   particleAge = particleAge + direction * ( loopTime - 2.0 * particleAge );
@@ -1185,16 +1207,24 @@ void main() {
 
 #if defined(USE_PARTICLE_TRAILS)
   // the first trail starts after trailInterval seconds
-  float trailID = mod( vertexID, trailCount );
   float trailLoopTime = trailCount * trailInterval;
   float trailID0 = floor( mod( particleAge, trailLoopTime ) / trailInterval ); // this will be larger than trailCount when maxTrailLifeTime is large
-  float trailLoop = floor( particleAge / trailLoopTime - (trailID > trailID0 ? 1.0 : 0.0));
+  float trailID = mod( vertexID, trailCount );
+
+#if PARTICLE_ORDER == 0
+  trailID = trailID0 - (trailCount - 1. - trailID); // newest last
+#elif PARTICLE_ORDER == 1
+  trailID = trailID0 - trailID; // oldest last
+#else
+  trailID = trailID > trailID0 ? trailID - trailCount : trailID; // cyclic (original)
+#endif
+
+  float trailLoop = floor( particleAge / trailLoopTime );
   float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval + trailInterval;
+  float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
 
   if (trailStartAge >= 0.0 && trailStartAge < particleLifeTime + trailInterval)
   {
-    float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
-
     if (particleAge >= 0.0 && particleAge < trailStartAge)
     {
       motionAge = particleAge;
@@ -1218,9 +1248,6 @@ void main() {
   {
     vOverTimeRatio = -1.0;
   }
-
-  vec3 transformed = vec3(0.0);
-  float particleScale = 1.0;
 
 #if defined(USE_PARTICLE_DRAG)
   // simulate drag by blending the motionAge to (1-0.5*drag)*particleLifeTime
@@ -1283,7 +1310,7 @@ void main() {
   av += aa*0.5*motionAge;
 #endif
 
-  transformed = p + v*motionAge;
+  vec3 transformed = p + v*motionAge;
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
   transformed = applyQuaternion( transformed, eulerToQuaternion( av * motionAge ) );
@@ -1307,8 +1334,8 @@ void main() {
 #endif
 
   vec2 rotScale = calcRotationScaleOverTime( vOverTimeRatio, seed );
+  float particleScale = rotScale.y;
 
-  particleScale = rotScale.y;
   vParticleColor = calcColorOverTime( vOverTimeRatio, seed ); // rgba format
 
   float c = cos( rotScale.x );
