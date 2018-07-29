@@ -44,9 +44,11 @@
     orbitalVelocity: "USE_PARTICLE_ORBITAL",
     orbitalAcceleration: "USE_PARTICLE_ORBITAL",
     drag: "USE_PARTICLE_DRAG",
+    destinationWeight: "USE_PARTICLE_DESTINATION",
   }
 
   const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "original"]
+  const AXES_NAMES = ["x", "y", "z"]
 
   // Bring all sub-array elements into a single array e.g. [[1,2],[[3],4],5] => [1,2,3,4,5]
   const flattenDeep = arr1 => arr1.reduce((acc, val) => Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val), [])
@@ -140,6 +142,9 @@
       velocityScale: { default: 0 },
       velocityScaleMinMax: { type: "vec2", default: {x: 0, y: 3} },
       drag: { default: 0 },
+      destination: { type: "selector" },
+      destinationOffset: { default: "0 0 0" },
+      destinationWeight: { default: "0" },
 
       enable: { default: true },
       model: { type: "selector" },
@@ -185,6 +190,9 @@
       this.params = new Float32Array(4*4).fill(0) // see ..._PARAM constants
       this.velocityScale = new Float32Array(3).fill(0) // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
       this.emitterColor = new THREE.Vector3() // use vec3 for color
+      this.destination = new Float32Array(2*4).fill(0) // range value, xyz is destinationEntity.position + destinationOffset, w is destinationWeight
+      this.destinationOffset // parsed value for destinationOffset, this will be blended into destination
+      this.destinationWeight // parsed value for destinationWeight
       this.nextID = 0
       this.nextTime = 0
       this.relative = this.data.relative // cannot be changed at run-time
@@ -310,6 +318,14 @@
         this.updateAngularVec2PartRange(data.orbitalAcceleration, [0], "orbital", 1) // y part
       }
 
+      if (data.destinationOffset !== oldData.destinationOffset) {
+        this.destinationOffset = this.updateVec4XYZRange(data.destinationOffset, "destination")
+      }
+
+      if (data.destinationWeight !== oldData.destinationWeight) {
+        this.destinationWeight = this.updateVec4WRange(data.destinationWeight, [0], "destination")
+      }
+
       if (data.duration !== oldData.duration) {
         this.params[DURATION_PARAM] = data.duration
         this.emitterTime = 0 // if the duration is changed then restart the particles
@@ -373,7 +389,8 @@
     },
 
     tick(time, deltaTime) {
-      if (!this.data.model || this.modelVertices) {
+      const data = this.data
+      if (!data.model || this.modelVertices) {
         if (deltaTime > 100) deltaTime = 100 // ignore long pauses
         const dt = deltaTime/1000 // dt is in seconds
   
@@ -382,6 +399,10 @@
   
         if (this.geometry && this.manageIDs) {
           this.updateWorldTransform(this.emitterTime)
+        }
+
+        if (data.destination && data.destination.object3D && (this.destinationWeight[0] > 0 || this.destinationWeight[1] > 0)) {
+          this.updateDestinationEntity()
         }
       }
     },
@@ -451,6 +472,7 @@
           rotationScaleOverTime: { value: this.rotationScaleOverTime },
           velocityScale: { value: this.velocityScale },
           emitterColor: { value: this.emitterColor },
+          destination: { value: this.destination },
 
           fogDensity: { value: 0.00025 },
           fogNear: { value: 1 },
@@ -557,6 +579,7 @@
         this[uniformAttr][j++] = vecRange[i++] // z
         j++ // skip the w
       }
+      return vecRange
     },
 
     updateAngularVec4XYZRange(vecData, uniformAttr) {
@@ -640,6 +663,8 @@
       extent[0].length = 3
       extent[0].length = 3
 
+      // TODO include destination
+
       const maxR = Math.max(...extent[0].map(Math.abs), ...extent[1].map(Math.abs))
       if (!this.geometry.boundingSphere) {
         this.geometry.boundingSphere = new THREE.Sphere()
@@ -659,6 +684,28 @@
         this.enableEditorObject(true)
       }
     },
+
+    updateDestinationEntity: (function() {
+      let dest = new THREE.Vector3()
+      let selfPos = new THREE.Vector3()
+
+      return function updateDestinationEntity() {
+        const data = this.data
+
+        data.destination.object3D.getWorldPosition(dest)
+
+        if (data.relative === "local") {
+          this.el.object3D.getWorldPosition(selfPos)
+          dest.sub(selfPos)
+        }
+
+        // this.destination is a vec4, this.destinationOffset is a vec3
+        for (let i = 0, n = AXES_NAMES.length; i < n; i++) {
+          this.destination[i] = dest[AXES_NAMES[i]] + this.destinationOffset[i] // min part of range
+          this.destination[i + 4] = dest[AXES_NAMES[i]] + this.destinationOffset[i + 3] // max part of range
+        }
+      }
+    })(),
 
     enableEditorObject(enable) {
       const existingMesh = this.el.getObject3D("mesh")
@@ -974,6 +1021,7 @@ uniform vec4 colorOverTime[OVER_TIME_ARRAY_LENGTH];
 uniform vec2 rotationScaleOverTime[OVER_TIME_ARRAY_LENGTH];
 uniform vec4 textureFrames;
 uniform vec3 velocityScale;
+uniform vec4 destination[2];
 
 varying vec4 vParticleColor;
 varying float vOverTimeRatio;
@@ -1341,22 +1389,40 @@ void main() {
   float c = cos( rotScale.x );
   float s = sin( rotScale.x );
 
+#if defined(WORLD_RELATIVE)
+  transformed = applyQuaternion( transformed, quaternion );
+#endif
+
+  transformed += position;
+
+#if defined(USE_PARTICLE_DESTINATION)
+  float destinationWeight = randFloatRange( destination[0].w, destination[1].w, seed );
+  vec3 destinationPos = randVec3Range( destination[0].xyz, destination[1].xyz, seed );
+  
+  transformed = mix( transformed, destinationPos, motionAge/particleLifeTime*destinationWeight );
+#endif
+
+
 #if defined(USE_PARTICLE_VELOCITY_SCALE)
-  // we'll calculate the screen space velocity by determining the particle movement
-  // between now and velocityScaleDelta. We use a reasonably small velocityScaleDelta 
-  // to give better results for the angular and orbital motion. When drag is applied
-  // the velocity effectively tends to 0 as the ageRatio increases
+  // We repeat all of the motion calculations at motionAge + a small amount (velocityScaleDelta).
+  // We convert the current position and the future position in screen space and determine
+  // the screen space velocity. VelocityScaleDelta is reasonably small to give better
+  // results for the angular and orbital motion, and when drag is applied the effective
+  // velocity will tend to 0 as the vOverTimeRatio increases
 
   float velocityScaleDelta = 0.1;
 
 #if defined(USE_PARTICLE_DRAG)
-  float futureT = velocityScaleDelta*mix(1.0, 1.0 - drag, vOverTimeRatio);
+  float futureT = motionAge + velocityScaleDelta*mix(1.0, 1.0 - drag, vOverTimeRatio);
 #else
-  float futureT = velocityScaleDelta;
+  float futureT = motionAge + velocityScaleDelta;
 #endif
 
   vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
-  vec3 transformedFuture = transformed + v*futureT;
+
+  // we will determine a future position using the preDestination value, then apply 
+  // destination warping as the last step
+  vec3 transformedFuture = p + v*futureT;
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
   transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( av*futureT ) );
@@ -1365,6 +1431,18 @@ void main() {
 #if defined(USE_PARTICLE_ORBITAL)
   transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, ov*futureT ) );
 #endif
+
+#if defined(WORLD_RELATIVE)
+  transformedFuture = applyQuaternion( transformedFuture, quaternion );
+#endif
+
+  transformedFuture += position;
+
+#if defined(USE_PARTICLE_DESTINATION)
+  // use min(1) to ensure the particle stops at the destination position
+  transformedFuture = mix( transformedFuture, destinationPos, min( 1., futureT/particleLifeTime )*destinationWeight );
+#endif
+
 
   vec4 pos2DFuture = projectionMatrix * modelViewMatrix * vec4( transformedFuture, 1.0 );
   vec2 screen = pos2DFuture.xy / pos2DFuture.z - pos2D.xy / pos2D.z; // TODO divide by 0?
@@ -1387,16 +1465,15 @@ void main() {
 
   vCosSinRotation = vec2( c, s );
 
-#if defined(WORLD_RELATIVE)
-  transformed = applyQuaternion( transformed, quaternion );
-#endif
-
-  transformed += position;
-
   // #include <color_vertex>
   // #include <begin_vertex> replaced by code above
   // #include <morphtarget_vertex>
   #include <project_vertex>
+
+// #if defined(USE_PARTICLE_TRAILS)
+//   gl_Position.z -= mod( (particleID + particleCount)*trailCount + trailID + trailCount, vertexCount )*0.00001;
+// #endif
+
 
   float particleSize = params[2].x;
   float usePerspective = params[2].y;

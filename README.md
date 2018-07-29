@@ -24,8 +24,6 @@ For a demo goto https://harlyq.github.io/aframe-sprite-particles-component/
 ## Values
 Some of the properties are listed as type (*range*), which is either a minimum and maximum value separated by `..` (the system will chose a value within that range for each particle) or just a single value.
 
-Some properties are listed as type (*range array*). This provides different values over the life-time of the particle.  The first value is for when the particle is created, linearly interpolating over values, until the last value is reached at the end of the particle's life.  By default there are a maximum of 5 elements for each over-time array, but this can be changed in the **overTimeSlots** parameter. Each element of the array is of type (*range*) so it may be either a single value or a min and max value separated by `..`
-
 For example:
 
 `lifeTime: 1` all particles have a life time of 1 (number range)
@@ -34,6 +32,10 @@ For example:
 
 `velocity: 1 1 .1 .. 2 3 5` velocity value between 1 and 2 for x, 1 and 3 for y, .1 and 5 for z (vec3 range)
 
+Some properties are listed as type (*range array*). This provides different values over the life-time of the particle.  The first value is for when the particle is created, linearly interpolating over values, until the last value is reached at the end of the particle's life.  By default there are a maximum of 5 elements for each over-time array, but this can be changed in the **overTimeSlots** parameter. Each element of the array is of type (*range*) so it may be either a single value or a min and max value separated by `..`
+
+For example:
+
 `scale: 1..2,3,6,.5 .. 1,9` there are 5 values so each value represents 0%, 25%, 50%, 75% 100% of the particles life time. At 0% scale is between 1 and 2, then blend to 3 at 25%, then up to 6 at 50%, a value between .5 and 1 at 75%, then back up to 9 at 100% (number range[])
 
 `rotation: 0,360` there are 2 values, each particle starts at 0 rotation, and linearly interpolates counterclockwise to 360 (rotation about the XY plane) over the lifetime of the particle (number range[])
@@ -41,96 +43,199 @@ For example:
 ## Properties
 The list of properties in alphabetical order:
 
-**acceleration** - range for acceleration of each particle in local coordinates (*vec3 range*) default 0 0 0
+**acceleration** : vec3 range = `0 0 0`
 
-**alphaTest** - don't draw any pixels from the texture that fall below this alpha level. can be used to hide low alpha parts of the texture, but may leave artefacts around the edges of particles (*number*) default 0
+range for acceleration of each particle in local coordinates
 
-**angularVelocity** - range for rotational velocity in degrees per second (counterclockwise) around the local origin. first element is about the X axis, second about Y and third for the Z axis (*vec3 range*) default 0 0 0
+**alphaTest** : number = `0`
 
-**blending** - control how the particles' color blends with the colors behind the particle system (*none, normal, additive, subtractive, multiply*) default normal
+don't draw any pixels from the texture that fall below this alpha level. can be used to hide low alpha parts of the texture, but may leave artefacts around the edges of particles (*number*) default 0
 
-**color** - over-time ranges for the particle color. can use names e.g. `blue` or `color`, or hex strings e.g. `#ff0` or `#e7f890` (*color range array*) default white
+**angularVelocity** : vec3 range = `0 0 0`
 
-**depthTest** - if true, particles will not be drawn if another object has been drawn previously in front of the particle (*boolean*) default true
+range for rotational velocity in degrees per second (counterclockwise) around the local origin. first element is about the X axis, second about Y and third for the Z axis (*vec3 range*) default 0 0 0
 
-**depthWrite** - if true, particle pixels will write their depth position to the depth buffer (obscuring objects that appear behind the particle, but were drawn after the particle system). if false, the particles do not affect the depth buffer, so objects drawn after the particle system, but located behind the particle system will be drawn on top (*boolean*) default false
+**blending** : none | normal | additive | subtractive | multiply = `normal`
 
-**direction** - the direction to play the particle effect. if playing backward the particle will start at the end of its maximum age and then get younger (*forward, backward*) default forward
+control how the particles' color blends with the colors behind the particle system (*none, normal, additive, subtractive, multiply*) default normal
 
-**drag** - slows particles as they age.  0, is no drag; 1 is full drag, and will continually slow the particle, finally stopping when it reaches it's halfway point (*number*) default 0
+**color** : color range array = `white`
 
-**duration** - no new particles will be generated after this time in seconds. if negative, particles are generated forever. changing the duration will restart the particle system (*number*) default -1
+over-time ranges for the particle color. can use names e.g. `blue` or `color`, or hex strings e.g. `#ff0` or `#e7f890`
 
-**editorObject** - if true, generate a bounding box called "mesh" which helps selecting and provides a selection box in the editor (*boolean*) default true
+**depthTest** : boolean = `true`
 
-**emitterColor** - overall color for the emitter. It is cheaper to set the emitter color than using *color* to color each particle, although the emitter color is a single color (*color*) default white
+if true, particles will not be drawn if another object has been drawn previously in front of the particle
 
-**enable** - enable or disable the emitter. existing particles will continue their lives, but there will be no new particles (*boolean*) default true
+**depthWrite** : boolean = `false`
 
-**enableInEditor** - if true, the particle system will run while the AFrame Inspector is active (*boolean*) default false
+if true, particle pixels will write their depth position to the depth buffer (obscuring objects that appear behind the particle, but were drawn after the particle system). if false, the particles do not affect the depth buffer, so objects drawn after the particle system, but located behind the particle system will be drawn on top
 
-**fog** - if true, apply fog to all particles (*boolean*) default true
 
-**frustumCulled** - if false then always render the particle system. This is useful for world relative systems that move a lot because the bounds of the particle system are only around the current position, and not all past positions (*boolean*) default true
+**destination** : selector = null
 
-**lifeTime** - range for maximum age of each particle (*number range*) default 1
+designates a final destination for particles. How closely the particles get to the destination is defined by **destinationWeight**
 
-**model** - the particles spawn in positions on the surface of the model (*selector*) default null
+**destinationOffset** : vec3 range = `0 0 0`
 
-**orbitalAcceleration** - acceleration (degrees per second squared) for a particle orbiting around the oribin (*number range*) default 0
+this defines an offset position on the **destination**. If the **destination** is null and **relative** is `local` the destination offset is relative to the sprite-particles' entity. If **destination** is null and **relative** is `world` the destination is relative to the origin of the world.
 
-**orbitalVelocity** - velocity (degrees per second) for a particle orbiting around the origin (*number range*) default 0
+**destinationWeight**: number range = `0`
 
-**opacity** - over-time ranges for the particle opacity. `0` is transparent, `1` is opaque (*number range array*) default 1
+a number between 0 and 1 to determine how closely particles get to their destination (it defines a lerp between the particles regular position and the destination).  If 0 then the destination has no influence.  If 1 then all particles will warrive at the destination.
 
-**overTimeSlots** - maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed after creation) (*int*) default 5
+**direction** : forward | backward = `forward`
 
-**particleOrder** - defines the draw order of particles, which can either be `newest` drawn last, `oldest` drawn last or `original` which uses a cylic buffer and reuses old particles so the draw order is indeterminant. The order applies to both particles and their trails. (*string*) default original
+the direction to play the particle effect. if playing backward the particle will start at the end of its maximum age and then get younger (**) default forward
 
-**particleSize** - the size of each particle in pixels. if **usePerspective** is `true` then this is the size of the particle at 1m from the camera (*number*) default 100
+**drag** : number = `0`
 
-**position** - range for offseting the initial particle position in local coordinates (*vec3 range*) default 0 0 0
+slows particles as they age.  0, is no drag; 1 is full drag, and will continually slow the particle, finally stopping when it reaches it's halfway point
 
-**radialAcceleration** - range for an acceleration from the local origin (*number range*) default 0
+**duration** : number = `-1`
 
-**radialPosition** - range for offseting the start position from the local origin (*number range*) default 0
+no new particles will be generated after this time in seconds. if negative, particles are generated forever. changing the duration will restart the particle system
 
-**radialType** - shape for radial parameters, either a circle in XY or a sphere (*circle, sphere*) default circle
+**editorObject** : boolean = `true`
 
-**radialVelocity** - range for a radial speed from the local origin (*number range*) default 0
+if true, generate a bounding box called "mesh" which helps selecting and provides a selection box in the editor
 
-**relative** - if local, all particles move relative to the entity. if world, new particles are spawned at the current entity position, but spawned particles are not affected by the entities' movement (cannot be changed after creation) (*world, local*) default local
+**emitterColor** : color = `white`
 
-**rotation** - over-time ranges for the particle rotation counterclockwise about the XY plane. all rotations are from min range to max range, and in degrees (*number range array*) default 0
+overall color for the emitter. It is cheaper to set the emitter color than using *color* to color each particle, although the emitter color is a single color
 
-**scale** - over-time ranges for the particle scale (scaled equally in all dimensions) (*number range array*) default 1
+**enable** : boolean = `true`
 
-**seed** - initial seed for randomness. if negative, then there is no initial seed (*int*) default -1
+enable or disable the emitter. existing particles will continue their lives, but there will be no new particles
 
-**spawnRate** - number of particles emitted per second. if **spawnType** is `burst`, then **spawnRate * maximum(lifeTime)** particles are spawned on the first frame of each loop (*number*) default 10
+**enableInEditor** : boolean = `false`
 
-**spawnType** - continuous particles are emitted at the spawn rate, whilst burst particles are all emitted once the spawner is activated, and are re-emitted once all particles expire (*continuous, burst*) default continous
+if true, the particle system will run while the AFrame Inspector is active
 
-**texture** - filename or element reference for the texture. if no texture is defined, a white opaque square is used (*map*) default empty
+**fog** : boolean = `true`
 
-**textureCount** - the number of frames in the **texture**. if 0, the number of frames is assumed to be **textureFrame.x * textureFrame.y** (*int*) default 0
+if true, apply fog to all particles
 
-**textureFrame** - the number of columns (x) and rows (y) for this texture (*vec2*) default 1 1
+**frustumCulled** : boolean = `true`
 
-**textureLoop** - the number of times to loop the texture over the lifetime of the particle (*number*) default 1
+if false then always render the particle system. This is useful for world relative systems that move a lot because the bounds of the particle system are only around the current position, and not all past positions
 
-**trailInterval** - generate trails after particles.  If active, the lead particle but will not change over time, but every **timeInterval** seconds it will drop a particle which will remain stationary and follow the over-time properties. Trails are deactivated if this value if 0 (*number*) default 0
+**lifeTime** : number range = `1`
 
-**trailLifeTime** - range value determining the age of each trail.  If this value is 0, then the trail life time is equal to the **lifeTime** attribute.  Trails only appear if **timeInterval** is larger than 0 (*number range*) default 0
+range for maximum age of each particle
 
-**transparent** - set to true to make the alpha channel of the texture transparent (*boolean*) default true
+**model** : selector = `null`
 
-**usePerspective** - if true, particles will become smaller the further they are from the camera (*boolean*) default true
+the particles spawn in positions on the surface of the model
 
-**velocityScale** - scale and rotate each particle according to it's screen-space velocity. The velocityScale is a multiplier of the particle's screen-space speed, so the higher the number the larger the particle will appear. 
-The texture is not rotated if the particles are travelling up the screen. Velocity scaling is only active when the value is greater than 0 (*number*) default 0
+**orbitalAcceleration** : number range = `0`
 
-**velocityScaleMinMax** - this sets the mix and max scaling for all particles when **velocityScale** is applied. This is useful for limiting the scaling on fast moving particles. The first value is the minimum scale, and the last value the maximum scale. Velocity scaling is only active when the **velocityScale** is greater than 0 (*vec2*) default 0 3
+acceleration (degrees per second squared) for a particle orbiting around the origin
+
+**orbitalVelocity** : number range = `0`
+
+velocity (degrees per second) for a particle orbiting around the origin
+
+**opacity** : number range array = `1`
+
+over-time ranges for the particle opacity. `0` is transparent, `1` is opaque
+
+**overTimeSlots** : int = `5`
+
+maximum number of slots for over-time attributes. if an attribute has more than **overTimeSlots** slots, then the remainder are ignored (cannot be changed after creation)
+
+**particleOrder** : newest | oldest | original = `original` 
+
+defines the draw order of particles, which can either be `newest` drawn last, `oldest` drawn last or `original` which uses a cylic buffer and reuses old particles so the draw order is indeterminant. The order applies to both particles and their trails.
+
+**particleSize** : number = `100`
+
+the size of each particle in pixels. if **usePerspective** is `true` then this is the size of the particle at 1m from the camera
+
+**position** : veec3 range = `0 0 0`
+
+range for offseting the initial particle position in local coordinates
+
+**radialAcceleration** : number range = `0`
+
+range for an acceleration from the local origin
+
+**radialPosition** : number range = `0`
+
+range for offseting the start position from the local origin
+
+**radialType** : circle | sphere = `circle`
+
+shape for radial parameters, either a circle in XY or a sphere
+
+**radialVelocity** : number range = `0`
+
+range for a radial speed from the local origin
+
+**relative** : world | local = `local`
+
+if local, all particles move relative to the entity. if world, new particles are spawned at the current entity position, but spawned particles are not affected by the entities' movement (cannot be changed after creation)
+
+**rotation** : number range array = `0`
+
+over-time ranges for the particle rotation counterclockwise about the XY plane. all rotations are from min range to max range, and in degrees
+
+**scale** : number range array = `1`
+
+over-time ranges for the particle scale (scaled equally in all dimensions)
+
+**seed** : int = `-1`
+
+initial seed for randomness. if negative, then there is no initial seed
+
+**spawnRate** : number = `10`
+
+number of particles emitted per second. if **spawnType** is `burst`, then **spawnRate * maximum(lifeTime)** particles are spawned on the first frame of each loop
+
+**spawnType** : continuous | burst = `continuous` 
+
+continuous particles are emitted at the spawn rate, whilst burst particles are all emitted once the spawner is activated, and are re-emitted once all particles expire (*continuous, burst*) default continous
+
+**texture** : map = `null`
+
+filename or element reference for the texture. if no texture is defined, a white opaque square is used
+
+**textureCount** : int = `0`
+
+the number of frames in the **texture**. if 0, the number of frames is assumed to be **textureFrame.x * textureFrame.y**
+
+**textureFrame** : vec2 = `1 1`
+
+the number of columns (x) and rows (y) for this texture
+
+**textureLoop** : number = `1`
+
+the number of times to loop the texture over the lifetime of the particle
+
+**trailInterval** : number = `0`
+
+generate trails after particles.  If active, the lead particle but will not change over time, but every **timeInterval** seconds it will drop a particle which will remain stationary and follow the over-time properties. Trails are deactivated if this value if 0
+
+**trailLifeTime** : number range = `0`
+
+range value determining the age of each trail.  If this value is 0, then the trail life time is equal to the **lifeTime** attribute.  Trails only appear if **timeInterval** is larger than 0
+
+**transparent** : boolean = `true`
+
+set to true to make the alpha channel of the texture transparent
+
+**usePerspective** : boolean = `true`
+
+if true, particles will become smaller the further they are from the camera
+
+**velocityScale** : number = `0`
+
+scale and rotate each particle according to it's screen-space velocity. The velocityScale is a multiplier of the particle's screen-space speed, so the higher the number the larger the particle will appear. 
+The texture is not rotated if the particles are travelling up the screen. Velocity scaling is only active when the value is greater than 0
+
+**velocityScaleMinMax** : vec2 = `0 3`
+
+this sets the mix and max scaling for all particles when **velocityScale** is applied. This is useful for limiting the scaling on fast moving particles. The first value is the minimum scale, and the last value the maximum scale. Velocity scaling is only active when the **velocityScale** is greater than 0
 
 
 ## Limitations
@@ -165,3 +270,5 @@ When particle trails are active, each particle will also spawn trail particles e
 When trails are active the effective lifespan of a particle is **lifeTime** plus **trailLifeTime**, so when **spawnType** is `burst`, there will be `spawnRate * (lifeTime + trailLifeTime)` particles spawned.
 
 The **particleOrder** is forced to `original` when **relative** is set to `world`. This is done to simplify the work on the CPU, so we just set the particle's position once when spawned.
+
+Destinations can be used without a **destination** entity, whereby the **destinationOffset** is used as the target position. 
