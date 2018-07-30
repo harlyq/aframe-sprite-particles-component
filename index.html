@@ -256,16 +256,36 @@
           <a-text value="destination" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 -4 0">
-            <a-entity animation="property: rotation; dur: 5300; to: 0 0 360; loop: -1; easing: linear;">
-              <a-sphere id="target2" position="-1 0 0" scale="0.1 0.1 0.1"></a-sphere>
-            </a-entity>
-            <a-entity sprite-particles="relative: world; texture: #arrow; velocityScale: 1.5; velocity: 0 1 0; lifeTime: 2; destination: #target2; destinationWeight: 0.9; destinationOffset: -0.2 -0.2 -0.2..0.2 0.2 0.2; emitterColor: orange"
-                animation="property: position; dur: 4500; to: 1 0 0; loop: -1; easing: linear; dir: alternate">
-              <a-box scale="0.1 0.1 0.1" color="orange"></a-box>
-            </a-entity>
-            <a-text value="destination + world" mixin="label"></a-text>
+          <a-entity animation="property: rotation; dur: 5300; to: 0 0 360; loop: -1; easing: linear;">
+            <a-sphere id="target2" position="-1 0 0" scale="0.1 0.1 0.1"></a-sphere>
           </a-entity>
+          <a-entity sprite-particles="relative: world; texture: #arrow; velocityScale: 1.5; velocity: 0 1 0; lifeTime: 2; destination: #target2; destinationWeight: 0.9; destinationOffset: -0.2 -0.2 -0.2..0.2 0.2 0.2; emitterColor: orange"
+              animation="property: position; dur: 4500; to: 1 0 0; loop: -1; easing: linear; dir: alternate">
+            <a-box scale="0.1 0.1 0.1" color="orange"></a-box>
+          </a-entity>
+          <a-text value="destination + world" mixin="label"></a-text>
         </a-entity>
+        <a-entity position="20 8 0" rotation="0 -2 0">
+          <a-entity sprite-particles="screenDepthOffset: 1; texture: #blob; spawnRate: 50; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-text value="depth offset" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="20 4 0" rotation="0 -2 0">
+          <a-entity sprite-particles="texture: #blob; spawnRate: 50; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-text value="no depth offset" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="20 0 0" rotation="0 -2 0">
+          <a-entity sprite-particles="texture: #blob; spawnRate: 5; trailInterval: 0.1; trailLifeTime: 2; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white,white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-text value="trails + no depth offset" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="20 -4 0" rotation="0 -2 0">
+          <a-entity sprite-particles="screenDepthOffset: 1; texture: #blob; spawnRate: 5; trailInterval: 0.1; trailLifeTime: 2; velocity: -0.1 -0.1 0..0.1 0.1 0; depthWrite: true; color: black..white,white; lifeTime: 5; alphaTest: 0.5; particleOrder: original"></a-entity>
+          <a-text value="trails + depth offset" mixin="label"></a-text>
+        </a-entity>
+      </a-entity>
     </a-scene>
+    <!--script>
+      let myScene = document.querySelector("a-scene")
+      myScene.renderer.sortObjects = true
+    </script-->
   </body>
 </html>

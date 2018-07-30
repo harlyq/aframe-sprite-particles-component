@@ -18,6 +18,7 @@
   const TRAIL_INTERVAL_PARAM = 12 // [3].x
   const PARTICLE_COUNT_PARAM = 13 // [3].y
   const TRAIL_COUNT_PARAM = 14 // [3].z
+  const SCREEN_DEPTH_OFFSET_PARAM = 15 // [3].w
 
   const MODEL_MESH = "mesh"
 
@@ -45,6 +46,7 @@
     orbitalAcceleration: "USE_PARTICLE_ORBITAL",
     drag: "USE_PARTICLE_DRAG",
     destinationWeight: "USE_PARTICLE_DESTINATION",
+    screenDepthOffset: "USE_PARTICLE_SCREEN_DEPTH_OFFSET",
   }
 
   const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "original"]
@@ -150,6 +152,7 @@
       model: { type: "selector" },
       direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
       particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
+      screenDepthOffset: { default: 0 },
       alphaTest: { default: 0 }, 
       fog: { default: true },
       depthWrite: { default: false },
@@ -232,6 +235,7 @@
       this.params[RADIAL_PARAM] = data.radialType === "circle" ? 0 : 1
       this.params[DIRECTION_PARAM] = data.direction === "forward" ? 0 : 1
       this.params[DRAG_PARAM] = THREE.Math.clamp(data.drag, 0, 1)
+      this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5;
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -1235,9 +1239,9 @@ void main() {
 
   // we use the id as a seed for the randomizer, but because the IDs are fixed in 
   // the range 0..particleCount we calculate a virtual ID by taking into account
-  // the number of loops that have occurred (note, particleIDs above particleID0 are assumed 
-  // to be in the previous loop).  We use the modoulo of the RANDOM_REPEAT_COUNT to
-  // ensure that the virtualID doesn't exceed the floating point precision
+  // the number of loops that have occurred (note, particles from the previous 
+  // loop will have a negative particleID). We use the modoulo of the RANDOM_REPEAT_COUNT 
+  // to ensure that the virtualID doesn't exceed the floating point precision
 
   float virtualID = mod( particleID + loop * particleCount, float( RANDOM_REPEAT_COUNT ) );
   float seed = mod( 1664525.*virtualID*baseSeed*110. + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
@@ -1287,7 +1291,7 @@ void main() {
 #else
   motionAge = particleAge;
   vOverTimeRatio = particleAge/particleLifeTime;
-#endif
+#endif // defined(USE_PARTICLE_TRAILS)
 
   // these checks were around large blocks of code above, but this caused instability
   // in some of the particle systems, so instead we do all of the work, then cancel 
@@ -1461,7 +1465,7 @@ void main() {
   float screenScale = clamp( lenScreen * pos2D.z * velocityScale.x, velocityScale.y, velocityScale.z );
 
   particleScale *= screenScale; 
-#endif
+#endif // defined(USE_PARTICLE_VELOCITY_SCALE)
 
   vCosSinRotation = vec2( c, s );
 
@@ -1470,10 +1474,17 @@ void main() {
   // #include <morphtarget_vertex>
   #include <project_vertex>
 
-// #if defined(USE_PARTICLE_TRAILS)
-//   gl_Position.z -= mod( (particleID + particleCount)*trailCount + trailID + trailCount, vertexCount )*0.00001;
-// #endif
+#if defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
+  float screenDepthOffset = params[3].w;
 
+#if defined(USE_PARTICLE_TRAILS)
+  // multiply trailCount by 2 because trailID ranges from [-trailCount, trailCount]
+  gl_Position.z -= (particleID*trailCount*2. + trailID)*gl_Position.w*screenDepthOffset/vertexCount;
+#else
+  gl_Position.z -= particleID*gl_Position.w*screenDepthOffset/vertexCount;
+#endif
+
+#endif // USE_PARTICLE_SCREEN_DEPTH_OFFSET
 
   float particleSize = params[2].x;
   float usePerspective = params[2].y;
@@ -1537,7 +1548,7 @@ void main() {
     uvTransform[2][0] = c * tx + s * ty - ( c * cx + s * cy ) + cx;
     uvTransform[2][1] = -s * tx + c * ty - ( -s * cx + c * cy ) + cy;
   }
-#endif
+#endif // defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
 
   // #include <logdepthbuf_fragment>
   #include <map_particle_fragment>
