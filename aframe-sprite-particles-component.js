@@ -121,6 +121,7 @@
       textureFrame: { type: "vec2", default: {x: 1, y: 1} },
       textureCount: { type: "int", default: 0 },
       textureLoop: { default: 1 },
+      randomizeFrames: { default: false },
       trailInterval: { default: 0 },
       trailLifeTime: { default: "0" },
       emitterColor: { type: "color" },
@@ -755,6 +756,7 @@
     // If a define has changed and we are playing we generate an error, otherwise (i.e. in the Inspector)
     // we update the material and rebuild the shader program
     updateDefines() {
+      const data = this.data
       const domAttrs = Object.keys(this.el.getDOMAttribute(this.attrName))
       const domDefines = domAttrs.map(a => ATTR_TO_DEFINES[a]).filter(b => b)
 
@@ -771,12 +773,16 @@
         defines.WORLD_RELATIVE = true
       }
 
-      if (this.data.velocityScale > 0) {
+      if (data.velocityScale > 0) {
         defines.USE_PARTICLE_VELOCITY_SCALE = true
       }
 
-      if (this.data.trailInterval > 0) {
+      if (data.trailInterval > 0) {
         defines.USE_PARTICLE_TRAILS = true
+      }
+
+      if (data.randomizeFrames) {
+        defines.USE_PARTICLE_RANDOMIZE_FRAMES = true
       }
 
       defines.PARTICLE_ORDER = PARTICLE_ORDER_STRINGS.indexOf(this.particleOrder)
@@ -1030,6 +1036,14 @@ uniform vec4 destination[2];
 varying vec4 vParticleColor;
 varying float vOverTimeRatio;
 varying vec2 vCosSinRotation;
+varying float vFrame;
+
+// alternative random algorithm, used for the initial seed.  Provides a better
+// result than using rand()
+float pseudoRandom( const float seed )
+{
+  return mod( 1664525.*seed + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
+}
 
 // each call to random will produce a different result by varying randI
 float randI = 0.0;
@@ -1244,7 +1258,7 @@ void main() {
   // to ensure that the virtualID doesn't exceed the floating point precision
 
   float virtualID = mod( particleID + loop * particleCount, float( RANDOM_REPEAT_COUNT ) );
-  float seed = mod( 1664525.*virtualID*baseSeed*110. + 1013904223., 4294967296. )/4294967296.; // we don't have enough precision in 32-bit float, but results look ok
+  float seed = pseudoRandom( virtualID*baseSeed*110. );
 
   float particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
 
@@ -1486,6 +1500,17 @@ void main() {
 
 #endif // USE_PARTICLE_SCREEN_DEPTH_OFFSET
 
+// vFrame is an int, but we must pass it as a float, so add 0.5 now and floor() in the
+// fragment shader to ensure there is no rounding error
+#if defined(USE_PARTICLE_RANDOMIZE_FRAMES)
+  vFrame = floor ( random( seed ) * textureFrames.z ) + 0.5;
+#else
+  float textureCount = textureFrames.z;
+  float textureLoop = textureFrames.w;
+
+  vFrame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) ) + 0.5;
+#endif
+
   float particleSize = params[2].x;
   float usePerspective = params[2].y;
 
@@ -1513,6 +1538,7 @@ uniform vec3 emitterColor;
 varying vec4 vParticleColor;
 varying float vOverTimeRatio;
 varying vec2 vCosSinRotation;
+varying float vFrame;
 
 void main() {
   if ( vOverTimeRatio < 0.0 || vOverTimeRatio > 1.0 ) {
@@ -1530,8 +1556,8 @@ void main() {
     vec2 invTextureFrame = 1.0 / textureFrames.xy;
     float textureCount = textureFrames.z;
     float textureLoop = textureFrames.w;
-  
-    float frame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) );
+
+    float frame = floor(vFrame);
     float c = vCosSinRotation.x;
     float s = vCosSinRotation.y;
     float tx = mod( frame, textureFrames.x ) * invTextureFrame.x;
