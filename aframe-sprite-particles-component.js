@@ -151,6 +151,7 @@
 
       enable: { default: true },
       model: { type: "selector" },
+      modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase },
       direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
       particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
       screenDepthOffset: { default: 0 },
@@ -874,6 +875,12 @@
         let numSpawned = 0 // number of particles and/or trails
         let id = startID
 
+        modelFillFn = randomPointInTriangle
+        switch (data.modelFill) {
+          case "edge": modelFillFn = randomPointOnTriangleEdge; break
+          case "vertex": modelFillFn = randomVertex; break
+        }
+
         // the nextTime represents the startTime for each particle, so while the nextTime
         // is less than this frame's time, keep emitting particles. Note, if the spawnRate is
         // low, we may have to wait several frames before a particle is emitted, but if the 
@@ -886,7 +893,7 @@
             id = this.nextID
 
             if (isUsingModel) {
-              randomPointInTriangle(this.modelVertices, modelPosition)
+              modelFillFn(this.modelVertices, modelPosition)
               particlePosition.setXYZ(id, modelPosition.x, modelPosition.y, modelPosition.z)
             }
   
@@ -1004,6 +1011,11 @@
       }
     }  
   })()
+
+  function randomVertex(vertices, pos) {
+    let index = Math.floor(Math.random()*vertices.length/3)*3
+    pos.fromArray(vertices, index)
+  }
 
   // based upon https://github.com/mrdoob/three.js/blob/master/src/renderers/shaders/ShaderLib/points_vert.glsl
   const particleVertexShader = `

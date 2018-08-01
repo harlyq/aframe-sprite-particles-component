@@ -15,7 +15,7 @@
         <img id="texturegrid1024" src="assets/texturegrid1024.jpg">
         <a-mixin id="label" text="align: center; width: 10" position="0 -1.5 0"></a-mixin>
       </a-assets>
-      <a-entity position="0 0 -15">
+      <a-entity position="0 0 -18">
         <a-entity position="0 0 0">
           <a-entity sprite-particles="texture: url(assets/texturegrid1024.jpg); rotation: 0,360; textureFrame: 8 8; textureLoop: 2; spawnRate: 0.015625; lifeTime: 64; particleSize: 1000"></a-entity>
           <a-text value="rotating frames" mixin="label"></a-text>
@@ -46,7 +46,7 @@
         </a-entity>
         <a-entity position="-4 4 0">
           <a-entity sprite-particles="texture: assets/blob.png; color: yellow, red; spawnRate: 200; spawnType: burst; radialVelocity: 2..4; radialAcceleration: -2; lifeTime: .5; scale: 1,.2; particleSize: 25; direction: backward"></a-entity>
-          <a-text value="backwards fireworks" mixin="label"></a-text>
+          <a-text value="fireworks + backwards" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-8 4 0">
           <a-entity sprite-particles="texture: assets/explosion_sheet.png; textureFrame: 5 5; radialType: sphere; radialPosition: .1; spawnRate: 20; lifeTime: 1; scale: 12"></a-entity>
@@ -163,8 +163,16 @@
         </a-entity>
         <a-entity position="8 -8 0">
           <a-obj-model id="house" scale="0.02 0.02 0.02" src="assets/house/House.obj" visible="false"></a-obj-model>
-          <a-entity rotation="0 180 0" position="3 -0.5 0" sprite-particles="model: #house; texture: #blob; spawnRate: 400; lifeTime: 5; particleSize: 10"></a-entity>
-          <a-text value="model" mixin="label"></a-text>
+          <a-entity rotation="0 180 0" position="3 -0.5 0" sprite-particles="model: #house; modelFill: triangle; texture: #blob; spawnRate: 400; lifeTime: 5; particleSize: 10"></a-entity>
+          <a-text value="model triangle" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="8 -12 0">
+          <a-entity rotation="0 180 0" position="3 -0.5 0" sprite-particles="model: #house; modelFill: edge; texture: #blob; spawnRate: 400; lifeTime: 5; particleSize: 10"></a-entity>
+          <a-text value="model edge" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="4 -12 0">
+          <a-entity rotation="0 180 0" position="3 -0.5 0" sprite-particles="model: #house; modelFill: vertex; texture: #blob; spawnRate: 400; lifeTime: 5; particleSize: 10"></a-entity>
+          <a-text value="model vertex" mixin="label"></a-text>
         </a-entity>
         <a-entity position="12 8 0">
           <a-entity sprite-particles="texture: #arrow; spawnRate: 2; lifeTime: 7; radialPosition: 1; orbitalVelocity: 150; velocityScale: 1; emitterColor: green"></a-entity>
@@ -237,20 +245,28 @@
           <a-text value="long life trails" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-16 4 0">
-          <a-entity sprite-particles="particleOrder: newest; texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 2; spawnType: burst; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -25..25; particleSize: 500"></a-entity>
-          <a-text value="ordered + burst" mixin="label"></a-text>
+          <a-entity sprite-particles="particleOrder: newest; texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 2; spawnType: burst; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -12..12; particleSize: 500"></a-entity>
+          <a-text value="newest + burst" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 4 0">
-          <a-entity sprite-particles="texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 2; spawnType: burst; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -25..25; particleSize: 500"></a-entity>
+          <a-entity sprite-particles="texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 2; spawnType: burst; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -12..12; particleSize: 500"></a-entity>
           <a-text value="unordered + burst" mixin="label"></a-text>
         </a-entity>
+        <a-entity position="-24 4 0">
+          <a-entity sprite-particles="particleOrder: oldest; texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 2; spawnType: burst; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -12..12; particleSize: 500"></a-entity>
+          <a-text value="oldest + burst" mixin="label"></a-text>
+        </a-entity>
         <a-entity position="-16 8 0">
-          <a-entity sprite-particles="particleOrder: newest; texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 6; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -25..25; particleSize: 500"></a-entity>
-          <a-text value="ordered" mixin="label"></a-text>
+          <a-entity sprite-particles="particleOrder: newest; texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 6; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -12..12; particleSize: 500"></a-entity>
+          <a-text value="newest" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 8 0">
-          <a-entity sprite-particles="texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 6; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -25..25; particleSize: 500"></a-entity>
+          <a-entity sprite-particles="texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 6; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -12..12; particleSize: 500"></a-entity>
           <a-text value="unordered" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="-24 8 0">
+          <a-entity sprite-particles="particleOrder: oldest; texture: assets/explosion_sheet.png; textureFrame: 5 5; trailInterval: .5; trailLifeTime: 6; velocity: -0.3 0.5 0..0.3 0.5 0; angularVelocity: 0 -60 0..0 60 0; spawnRate: 0.5; lifeTime: 3; opacity: 1,0; rotation: -12..12; particleSize: 500"></a-entity>
+          <a-text value="oldest" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 0 0">
           <a-entity animation="property: rotation; dur: 5300; to: 0 0 360; loop: -1; easing: linear;">
