@@ -306,7 +306,7 @@
 
       if (data.trailLifeTime !== oldData.trailLifeTime) {
         // if trailLifeTime is 0 then use the lifeTime values, and always ensure that trailLifeTime never exceeds the lifeTime
-        this.trailLifeTime = parseVecRange(data.trailLifeTime, [0]).map((x,i) => x > 0 ? Math.min(x, this.lifeTime[i]) : this.lifeTime[i])
+        this.trailLifeTime = parseVecRange(data.trailLifeTime, [0]).map((x,i) => x > 0 ? x : this.lifeTime[i])
         this["angularAcceleration"][3] = this.trailLifeTime[0] // angularAcceleration[0].w
         this["angularAcceleration"][7] = this.trailLifeTime[1] // angularAcceleration[1].w
       }
@@ -341,7 +341,7 @@
         const maxTrailLifeTime = data.trailInterval > 0 ? this.trailLifeTime[1] : 0
         const maxAge = maxParticleLifeTime + maxTrailLifeTime
         const particleCount = Math.max( 1, Math.ceil(maxAge*data.spawnRate) )
-        this.trailCount = 1 + ( data.trailInterval > 0 ? Math.ceil(maxTrailLifeTime/data.trailInterval) : 0 ) // +1 because the trail only starts after data.trailInterval seconds
+        this.trailCount = 1 + ( data.trailInterval > 0 ? Math.ceil( Math.min(maxTrailLifeTime, maxParticleLifeTime)/data.trailInterval ) : 0 ) // +1 because the trail includes the lead particle
         this.count = particleCount * this.trailCount
 
         this.params[SPAWN_TYPE_PARAM] = data.spawnType === "burst" ? 0 : 1
@@ -1216,7 +1216,7 @@ void main() {
   float trailCount = params[3].z;
   float maxParticleLifeTime = angularVelocity[1].w; // lifeTime packed into w component of angularVelocity
   float maxTrailLifeTime = angularAcceleration[1].w; // trailLifeTime packed into angularAcceleration.w
-  float loopTime = particleCount / spawnRate;
+  float particleLoopTime = particleCount / spawnRate;
   float motionAge = -1.0; // used to determine the age for particle movement
 
 #if defined(USE_PARTICLE_TRAILS)
@@ -1226,12 +1226,12 @@ void main() {
 #endif
 
   // the CPU manages IDs if it sets the position or disables particles, otherwise cpuID is -1
-  float particleID0 = cpuID > 0.0 ? cpuID : floor( mod( time, maxAge ) * spawnRate ); // this will lose precision eventually
+  float particleID0 = cpuID > 0.0 ? cpuID : floor( mod( time, particleLoopTime ) * spawnRate ); // this will lose precision eventually
 
   vOverTimeRatio = -1.0; // the vOverTimeRatio will be used for the lerps on over-time attributes
 
   // particles are either emitted in a burst (spawnType == 0) or spread evenly
-  // throughout 0..loopTime (spawnType == 1).  We calculate the ID of the last spawned particle particleID0 
+  // throughout 0..particleLoopTime (spawnType == 1).  We calculate the ID of the last spawned particle particleID0 
   // for this frame, any vertex IDs after particleID0 are assumed to belong to the previous loop
 
   // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
@@ -1248,8 +1248,8 @@ void main() {
   // for burst mode we use the rawParticleID, because the concept of particleID0 is irrelevant
   particleID = mix( rawParticleID, particleID, spawnType ); 
 
-  float loop = floor( time / loopTime );
-  float particleStartTime = loop * loopTime + particleID / spawnRate * spawnType;
+  float particleLoop = floor( time / particleLoopTime );
+  float particleStartTime = particleLoop * particleLoopTime + particleID / spawnRate * spawnType;
 
   // we use the id as a seed for the randomizer, but because the IDs are fixed in 
   // the range 0..particleCount we calculate a virtual ID by taking into account
@@ -1257,13 +1257,13 @@ void main() {
   // loop will have a negative particleID). We use the modoulo of the RANDOM_REPEAT_COUNT 
   // to ensure that the virtualID doesn't exceed the floating point precision
 
-  float virtualID = mod( particleID + loop * particleCount, float( RANDOM_REPEAT_COUNT ) );
+  float virtualID = mod( particleID + particleLoop * particleCount, float( RANDOM_REPEAT_COUNT ) );
   float seed = pseudoRandom( virtualID*baseSeed*110. );
 
   float particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
 
   float particleAge = time - particleStartTime;
-  particleAge = particleAge + direction * ( loopTime - 2.0 * particleAge );
+  particleAge = particleAge + direction * ( particleLoopTime - 2.0 * particleAge );
 
   // don't show particles that would be emitted after the duration
   if ( duration > 0.0 && time - particleAge >= duration ) 
@@ -1273,25 +1273,28 @@ void main() {
 
 #if defined(USE_PARTICLE_TRAILS)
   // the first trail starts after trailInterval seconds
-  float trailLoopTime = trailCount * trailInterval;
-  float trailID0 = floor( mod( particleAge, trailLoopTime ) / trailInterval ); // this will be larger than trailCount when maxTrailLifeTime is large
-  float trailID = mod( vertexID, trailCount );
+  // if trailLifeTime > particleLifeTime then we will use all of the trails and never loop
+  // them, so set the trailLoopTime to maxAge. This also means the trailID0 can be larger
+  // than trailCount, so we cap it to trailCount - 1
+  float trailLoopTime = maxTrailLifeTime > trailCount * trailInterval ? maxAge : trailCount * trailInterval;
+  float trailID0 = min( trailCount - 1., floor( mod( particleAge, trailLoopTime ) / trailInterval ) );
+  float rawTrailID = mod( vertexID, trailCount );
+  float trailLoop = floor( particleAge / trailLoopTime );
 
 #if PARTICLE_ORDER == 0
-  trailID = trailID0 - (trailCount - 1. - trailID); // newest last
+  float trailID = trailID0 - ( trailCount - 1. - rawTrailID ); // newest last
 #elif PARTICLE_ORDER == 1
-  trailID = trailID0 - trailID; // oldest last
+  float trailID = trailID0 - rawTrailID; // oldest last
 #else
-  trailID = trailID > trailID0 ? trailID - trailCount : trailID; // cyclic (original)
+  float trailID = rawTrailID > trailID0 ? rawTrailID - trailCount : rawTrailID; // cyclic (original)
 #endif
 
-  float trailLoop = floor( particleAge / trailLoopTime );
   float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval + trailInterval;
   float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
 
-  if (trailStartAge >= 0.0 && trailStartAge < particleLifeTime + trailInterval)
+  if (particleAge >= 0.0 && trailStartAge > 0.0 && trailStartAge < particleLifeTime + trailInterval)
   {
-    if (particleAge >= 0.0 && particleAge < trailStartAge)
+    if (particleAge < trailStartAge)
     {
       motionAge = particleAge;
       vOverTimeRatio = 0.0;

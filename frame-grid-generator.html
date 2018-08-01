@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+  </head>
+  <body>
+    <form>
+      Width: <select name="width"><option>8</option><option>16</option><option>32</option><option>64</option><option>128</option><option selected>256</option><option>512</option><option>1024</option></select>
+      Height: <select name="height"><option>8</option><option>16</option><option>32</option><option>64</option><option>128</option><option selected>256</option><option>512</option><option>1024</option></select>
+      Columns: <select name="columns"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select>
+      Rows: <select name="rows"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select>
+      Type: <select name="type"><option selected>frame</option><option>safe rotate</option></select>
+      <a id="download" style="cursor: pointer"><u>Download image</u></a>
+    </form>
+    <br><canvas id="output" style="width: 512px; height: 512px"></canvas>
+    <script>
+      const viewWidth = 512
+      const viewHeight = 512
+
+      let formEl = document.querySelector("form")
+      formEl.addEventListener("change", generateFrame)
+
+      const widthEl = document.querySelector("[name=width]")
+      const heightEl = document.querySelector("[name=height]")
+      const columnsEl = document.querySelector("[name=columns]")
+      const rowsEl = document.querySelector("[name=rows]")
+      const typeEl = document.querySelector("[name=type]")
+      let canvasEl = document.querySelector("#output")
+      let ctx = canvasEl.getContext("2d")
+
+      document.getElementById("download").addEventListener("click", function() { downloadCanvas(this) })
+
+      generateFrame()
+
+      function generateFrame() {
+        const w = parseInt(widthEl.value, 10)
+        const h = parseInt(heightEl.value, 10)
+        const cols = parseInt(columnsEl.value, 10)
+        const rows = parseInt(rowsEl.value, 10)
+        const type = typeEl.value
+        canvasEl.width = w
+        canvasEl.height = h
+
+        if (type === "frame") {
+          drawRectangles(w, h, rows, cols, w/cols, h/rows)
+        } else {
+          ctx.fillStyle = "black"
+          ctx.fillRect(0, 0, w, h)
+
+          const safeModifier = 0.58578643762 // 2 - sqrt(2) = 0.5857...
+          drawRectangles(w, h, rows, cols, Math.min(w/cols - 2, w/cols*safeModifier), Math.min(h/cols - 2, h/rows*safeModifier), "cut")
+        }
+      }
+
+      function drawRectangles(w, h, rows, cols, rw, rh, op) {
+        const dw = w/cols
+        const dh = h/rows
+
+        ctx.strokeStyle = "black"
+        ctx.fillStyle = "black"
+        const oldGlobalCompositeOperation = ctx.globalCompositeOperation
+
+        if (op === "cut") { ctx.globalCompositeOperation = "destination-out" }
+
+        for (let c = 0; c < cols; c++) {
+          for (let r = 0; r < rows; r++) {
+            // offset the draw by 0.5 for better pixel alignment
+            // subtract 1 from rw,rh so we draw within the bounds
+            ctx.rect(Math.ceil((c + 0.5)*dw - rw*0.5) + 0.5, Math.ceil((r + 0.5)*dh - rh*0.5) + 0.5, Math.floor(rw - 1), Math.floor(rh - 1))
+            ctx.stroke()
+            if (op === "cut") { ctx.fill() }
+          }
+        }
+
+        ctx.globalCompositeOperation = oldGlobalCompositeOperation
+      }
+
+      function downloadCanvas(link) {
+        const filename = typeEl.value + "_" + columnsEl.value + 'x' + rowsEl.value + '_' + widthEl.value + 'x' + heightEl.value + '.png'
+        link.href = canvasEl.toDataURL()
+        link.download = filename
+      }
+    </script>
+  </body>
+</html>
