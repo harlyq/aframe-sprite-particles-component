@@ -1,6 +1,6 @@
 {
   "name": "aframe-sprite-particles-component",
-  "version": "0.3.16",
+  "version": "0.4.0",
   "description": "aframe particle system component using texture billboards",
   "main": "aframe-sprite-particles-component.js",
   "files": ["aframe-sprite-particles-component.js"],

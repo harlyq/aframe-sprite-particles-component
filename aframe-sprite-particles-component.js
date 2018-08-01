@@ -47,6 +47,7 @@
     drag: "USE_PARTICLE_DRAG",
     destinationWeight: "USE_PARTICLE_DESTINATION",
     screenDepthOffset: "USE_PARTICLE_SCREEN_DEPTH_OFFSET",
+    source: "USE_PARTICLE_SOURCE",
   }
 
   const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "original"]
@@ -108,8 +109,6 @@
     "multiply": THREE.MultiplyBlending,
   }
 
-  let uniqueID = 0 // used to make unique IDs for world relative meshes that are registered on the scene
-
   AFRAME.registerComponent("sprite-particles", {
     schema: {
       enableInEditor: { default: false },
@@ -117,7 +116,7 @@
       duration: { default: -1 },
       spawnType: { default: "continuous", oneOf: ["continuous", "burst"], parse: toLowerCase },
       spawnRate: { default: 10 },
-      relative: { default: "local", oneOf: ["local", "world"], parse: toLowerCase },
+      source: { type: "selector" },
       textureFrame: { type: "vec2", default: {x: 1, y: 1} },
       textureCount: { type: "int", default: 0 },
       textureLoop: { default: 1 },
@@ -200,7 +199,6 @@
       this.destinationWeight // parsed value for destinationWeight
       this.nextID = 0
       this.nextTime = 0
-      this.relative = this.data.relative // cannot be changed at run-time
       this.numDisabled = 0
       this.numEnabled = 0
       this.manageIDs = false
@@ -211,7 +209,7 @@
 
     remove() {
       if (this.mesh) {
-        this.parentEl.removeObject3D(this.mesh.name)
+        this.el.removeObject3D(this.mesh.name)
       }
       if (data.model) {
         data.model.removeEventListener("object3dset", this.handleObject3DSet)
@@ -365,8 +363,8 @@
       }
 
       this.particleOrder = data.particleOrder
-      if (data.particleOrder !== "original" && data.relative === "world") {
-        console.warn(`changing particleOrder to 'original' (was '${data.particleOrder}'), because particles are world relative`)
+      if (data.particleOrder !== "original" && data.source) {
+        console.warn(`changing particleOrder to 'original' (was '${data.particleOrder}'), because particles have a source`)
         this.particleOrder = "original"
       }
 
@@ -386,7 +384,7 @@
 
       // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
       // once managed, always managed
-      this.manageIDs = this.manageIDs || !data.enable || this.relative === "world" || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" || data.model
+      this.manageIDs = this.manageIDs || !data.enable || data.source || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" || data.model
 
       // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
       if (data.texture !== oldData.texture) {
@@ -502,20 +500,9 @@
 
       this.mesh = new THREE.Points(this.geometry, this.material)
       this.mesh.frustumCulled = data.frustumCulled
-
-      this.parentEl = this.relative === "world" ? this.el.sceneEl : this.el
-      if (this.relative === "local") {
-        this.mesh.name = this.attrName
-      } else if (this.el.id) { // world relative with id
-        this.mesh.name = this.el.id + "_" + this.attrName
-      } else { // world relative, no id
-        this.parentEl.spriteParticleshUniqueID = (this.parentEl.spriteParticleshUniqueID || 0) + 1
-        this.mesh.name = this.attrName + (this.parentEl.spriteParticleshUniqueID > 1 ? this.parentEl.spriteParticleshUniqueID.toString() : "")
-      }
-      // console.log(this.mesh.name)
-
+      this.mesh.name = this.attrName
       this.material.name = this.mesh.name
-      this.parentEl.setObject3D(this.mesh.name, this.mesh)
+      this.el.setObject3D(this.mesh.name, this.mesh)
     },
 
     updateColorOverTime() {
@@ -615,9 +602,13 @@
 
     updateBounds() {
       const data = this.data
-      const maxAge = Math.max(this.lifeTime[0], this.lifeTime[1])
+      let maxAge = Math.max(this.lifeTime[0], this.lifeTime[1])
       const STRIDE = 4
       let extent = [new Array(STRIDE), new Array(STRIDE)] // extent[0] = min values, extent[1] = max values
+
+      if (data.drag > 0) {
+        maxAge = maxAge*(1 - .5*data.drag)
+      }
 
       // Use offset, velocity and acceleration to determine the extents for the particles
       for (let j = 0; j < 2; j++) { // index for extent
@@ -699,11 +690,8 @@
         const data = this.data
 
         data.destination.object3D.getWorldPosition(dest)
-
-        if (data.relative === "local") {
-          this.el.object3D.getWorldPosition(selfPos)
-          dest.sub(selfPos)
-        }
+        this.el.object3D.getWorldPosition(selfPos)
+        dest.sub(selfPos)
 
         // this.destination is a vec4, this.destinationOffset is a vec3
         for (let i = 0, n = AXES_NAMES.length; i < n; i++) {
@@ -742,7 +730,7 @@
         this.geometry.addAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
         this.geometry.addAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3).fill(0), 3))
 
-        if (this.relative === "world") {
+        if (this.data.source) {
           this.geometry.addAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4).fill(0), 4))
         }
 
@@ -768,10 +756,6 @@
       }
       for (key of domDefines) {
         defines[key] = true
-      }
-
-      if (this.relative === "world") {
-        defines.WORLD_RELATIVE = true
       }
 
       if (data.velocityScale > 0) {
@@ -847,27 +831,34 @@
       let quaternion = new THREE.Quaternion()
       let scale = new THREE.Vector3()
       let modelPosition = new THREE.Vector3()
+      let m4 = new THREE.Matrix4()
 
       return function(emitterTime) {
         const data = this.data
         const n = this.count
 
-        // for world relative particle the CPU sets the instancePosition and instanceQuaternion
+        // for particles using a source the CPU sets the instancePosition and instanceQuaternion
         // of the new particles to the current object3D position/orientation, and tells the GPU
         // the ID of last emitted particle (this.params[ID_PARAM])
         const spawnRate = this.data.spawnRate
         const isBurst = data.spawnType === "burst"
         const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
         const changeIDs = data.enable ? this.numEnabled < n : this.numDisabled < n
-        const isWorldRelative = this.relative === "world"
+        const hasSource = data.source && data.source.object3D
         const isUsingModel = this.modelVertices && this.modelVertices.length
 
         let particleVertexID = this.geometry.getAttribute("vertexID")
         let particlePosition = this.geometry.getAttribute("position")
         let particleQuaternion = this.geometry.getAttribute("quaternion")
 
-        if (isWorldRelative) {
-          this.el.object3D.matrixWorld.decompose(position, quaternion, scale)
+        if (hasSource) {
+          this.el.object3D.updateMatrixWorld()
+          data.source.object3D.updateMatrixWorld()
+
+          // get source matrix in our local space
+          m4.getInverse(this.el.object3D.matrixWorld)
+          m4.multiply(data.source.object3D.matrixWorld)
+          m4.decompose(position, quaternion, scale)
           this.geometry.boundingSphere.center.copy(position)
         }
 
@@ -897,7 +888,7 @@
               particlePosition.setXYZ(id, modelPosition.x, modelPosition.y, modelPosition.z)
             }
   
-            if (isWorldRelative) {
+            if (hasSource) {
               particlePosition.setXYZ(id, position.x, position.y, position.z)
               particleQuaternion.setXYZW(id, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
             }
@@ -935,13 +926,13 @@
             numSpawned = this.count
           }
 
-          if (isWorldRelative || isUsingModel) {
+          if (hasSource || isUsingModel) {
             particlePosition.updateRange.offset = startID
             particlePosition.updateRange.count = numSpawned
             particlePosition.needsUpdate = true
           }
 
-          if (isWorldRelative) {
+          if (hasSource) {
             particleQuaternion.updateRange.offset = startID
             particleQuaternion.updateRange.count = numSpawned
             particleQuaternion.needsUpdate = true
@@ -1028,7 +1019,7 @@
 
 attribute float vertexID;
 
-#if defined(WORLD_RELATIVE)
+#if defined(USE_PARTICLE_SOURCE)
 attribute vec4 quaternion;
 #endif
 
@@ -1423,7 +1414,7 @@ void main() {
   float c = cos( rotScale.x );
   float s = sin( rotScale.x );
 
-#if defined(WORLD_RELATIVE)
+#if defined(USE_PARTICLE_SOURCE)
   transformed = applyQuaternion( transformed, quaternion );
 #endif
 
@@ -1466,7 +1457,7 @@ void main() {
   transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, ov*futureT ) );
 #endif
 
-#if defined(WORLD_RELATIVE)
+#if defined(USE_PARTICLE_SOURCE)
   transformedFuture = applyQuaternion( transformedFuture, quaternion );
 #endif
 

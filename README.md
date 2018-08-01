@@ -12,7 +12,7 @@ For a demo goto https://harlyq.github.io/aframe-sprite-particles-component/
 ```html
 <head>
   <script src="https://aframe.io/releases/0.8.2/aframe.min.js"></script>
-  <script src="https://unpkg.com/aframe-sprite-particles-component@^0.3.0/aframe-sprite-particles-component.js"></script>
+  <script src="https://unpkg.com/aframe-sprite-particles-component@^0.4.0/aframe-sprite-particles-component.js"></script>
 </head>
 <body>
   <a-scene>
@@ -80,7 +80,7 @@ designates a final destination for particles. How closely the particles get to t
 
 **destinationOffset** : vec3 range = `0 0 0`
 
-this defines an offset position on the **destination**. If the **destination** is null and **relative** is `local` the destination offset is relative to the sprite-particles' entity. If **destination** is null and **relative** is `world` the destination is relative to the origin of the world.
+this defines an offset position on the **destination**. If the **destination** is null the destination offset is relative to the sprite-particles' entity.
 
 **destinationWeight**: number range = `0`
 
@@ -120,7 +120,7 @@ if true, apply fog to all particles
 
 **frustumCulled** : boolean = `true`
 
-if false then always render the particle system. This is useful for world relative systems that move a lot because the bounds of the particle system are only around the current position, and not all past positions
+if false then always render the particle system. This is useful for particles using a **source** that moves a lot because the bounds of the particle system are only around the current position, and not all past positions
 
 **lifeTime** : number range = `1`
 
@@ -174,9 +174,9 @@ shape for radial parameters, either a circle in XY or a sphere
 
 range for a radial speed from the local origin
 
-**relative** : world | local = `local`
+~~**relative** : world | local~~
 
-if local, all particles move relative to the entity. if world, new particles are spawned at the current entity position, but spawned particles are not affected by the entities' movement (cannot be changed after creation)
+replaced by **source**
 
 **rotation** : number range array = `0`
 
@@ -194,6 +194,10 @@ slightly adjusts the screen for each particle. if 0, this effect is disabled, if
 
 initial seed for randomness. if negative, then there is no initial seed
 
+**source** : selector = null
+
+new particles will be positioned and oriented to the source's current position and orientation, existing particles are unaffected. This is useful for making particles originate from a moving source, but not follow the source.
+
 **spawnRate** : number = `10`
 
 number of particles emitted per second. if **spawnType** is `burst`, then **spawnRate * maximum(lifeTime)** particles are spawned on the first frame of each loop
@@ -202,7 +206,7 @@ number of particles emitted per second. if **spawnType** is `burst`, then **spaw
 
 continuous particles are emitted at the spawn rate, whilst burst particles are all emitted once the spawner is activated, and are re-emitted once all particles expire (*continuous, burst*) default continous
 
-**texture** : map = `null`
+**texture** : map = null
 
 filename or element reference for the texture. if no texture is defined, a white opaque square is used
 
@@ -254,14 +258,11 @@ When using **rotation** on textures with frames, parts of the adjacent frames wi
 
 The particle systems uses a cyclic pool of (**spawnRate * maximum(lifeTime)**) particles and particles that have expired are recycled to become new particles.  This impacts the draw order, because a new particle may actually be recycled from a much older particle and hence be drawn before the previous particle. Typically it is not a problem, but it may explain why a particle system appears different after the first loop.
 
-The object3d name matches the attribute name used to define the component e.g. "sprite-particles" or "sprite-particles__fire".  If the particle system is world relative, then the object3d is attached to the sceneEl, and will
-be the id name followed by the attribute name e.g. "box_sprite-particles" or "bonfire_sprite-particles__fire".  If there is no id for the particles then a unique number will be used e.g. "sprite-particles2", "sprite-particles5".
+The object3d name matches the attribute name used to define the component e.g. "sprite-particles" or "sprite-particles__fire".
 
 If the a-entity containing the particle system also contains some other geometry, then **editorObject** will do nothing because we won't override the other geometry.
 
-In the Inspector it is not possible to click on particle systems that are world relative, because they are attached to the scene element, rather than an a-entity.
-
-The shader for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes after creation (attributes can still be changed in the Inspector). However, there are no problems changing attributes that existed when the component was created (except *relative* and *overTimeSlots*).
+The shader for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes after creation (attributes can still be changed in the Inspector). However, there are no problems changing attributes that existed when the component was created (except for *overTimeSlots*).
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
 
@@ -271,11 +272,13 @@ When particle trails are active, each particle will also spawn trail particles e
 
 When trails are active the effective lifespan of a particle is **lifeTime** plus **trailLifeTime**, so when **spawnType** is `burst`, there will be `spawnRate * (lifeTime + trailLifeTime)` particles spawned.
 
-The **particleOrder** is forced to `original` when **relative** is set to `world`. This is done to simplify the work on the CPU, so we just set the particle's position once when spawned.
+The **particleOrder** is forced to `original` when a **source** is defined. This is done to simplify the work on the CPU, so we can set the particle's position just once when spawned.
 
 Destinations can be used without a **destination** entity, whereby the **destinationOffset** is used as the target position. 
 
 **screenDepthOffset** can be useful to make new particles appear in front of old particles, but because it is hacking the screen depth of each particle, it can give odd results when looking at the particles from an angle.  The offset is multiplied by the particleID, so having many particles will result in large offsets, which can result in particles disappearing or appearing incorrectly around nearby objects.  Try using small offsets to get the desired effect.
+
+When using **source**, the particles positions are based off of the vector from the particle component's entities' position to the source position, so if the particle component's entity moves, then the whole particle system will move as well.  It is recommended that the particle component's entity does not move when using **source**.
 
 ## Transparency
 
@@ -295,7 +298,7 @@ Particle systems can involve hundreds of particles, so there are often times whe
 * if the particle system is setup in 2 dimensions (i.e. one dimension is constant) then add a small variation to the constant dimension. This lessens the chance of particles being the same distance from the camera.
 
 Once we have fixed particle occlusion there may still be problems with the draw order of the particles.  By default the particleOrder is `original` which means that expired particles will be reused, so a new particle may appear underneath existing particles because it is actually a reused old particle. Workarounds for this are:
-* set **particleOrder** to `newest` so the newest particle is drawn last, but this option is not available when **relative** is `world`
+* set **particleOrder** to `newest` so the newest particle is drawn last, but this option is not available when **source** is used
 * set **screenDepthOffset** to `1` which moves the particles in screen space, so the newest particles appear in front.  Because we are hacking the screen depth, the particle may appear in front of closer objects, or may even disappear because it is behind the camera - using a smaller value will help
 
 For a detailed explaination for depth testing and the depth buffer see https://learnopengl.com/Advanced-OpenGL/Depth-testing
