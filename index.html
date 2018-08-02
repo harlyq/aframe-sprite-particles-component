@@ -15,7 +15,7 @@
         <img id="texturegrid1024" src="assets/texturegrid1024.jpg">
         <a-mixin id="label" text="align: center; width: 10" position="0 -1.5 0"></a-mixin>
       </a-assets>
-      <a-entity position="0 0 -18">
+      <a-entity position="0 0 -19">
         <a-entity position="0 0 0">
           <a-entity sprite-particles="texture: url(assets/texturegrid1024.jpg); rotation: 0,360; textureFrame: 8 8; textureLoop: 2; spawnRate: 0.015625; lifeTime: 64; particleSize: 1000"></a-entity>
           <a-text value="rotating frames" mixin="label"></a-text>
@@ -320,20 +320,28 @@
           <a-entity id="ribbonsource" animation="property: position; dur: 4500; to: 1 0 0; loop: -1; easing: linear; dir: alternate">
             <a-box scale="0.1 0.1 0.1" color="purple"></a-box>
           </a-entity>
-          <a-entity sprite-particles="spawnType: burst; source: #ribbonsource; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 5"></a-entity>
+          <a-entity sprite-particles="spawnType: burst; source: #ribbonsource; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 5; usePerspective: false"></a-entity>
           <a-text value="ribbon + source + burst" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-4 -12 0">
           <a-entity id="ribbonsource2" animation="property: position; dur: 4500; to: 1 0 0; loop: -1; easing: linear; dir: alternate">
             <a-box scale="0.1 0.1 0.1" color="purple"></a-box>
           </a-entity>
-          <a-entity sprite-particles="source: #ribbonsource2; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 5"></a-entity>
+          <a-entity sprite-particles="source: #ribbonsource2; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 5; usePerspective: false"></a-entity>
           <a-text value="ribbon + source" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-8 -12 0">
           <a-entity sprite-particles="velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 5; usePerspective: false"></a-entity>
           <a-text value="ribbon - perspective" mixin="label"></a-text>
         </a-entity>
+        <a-entity position="-12 -12 0">
+          <a-entity sprite-particles="velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 0.5; usePerspective: false"></a-entity>
+          <a-text value="short ribbon" mixin="label"></a-text>
+        </a-entity>
+        <!--a-entity position="0 0 0">
+          <a-entity sprite-particles="position: -1 0 0..1 0 0; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 3; spawnRate: 1; trailInterval: 1; trailType: ribbon; trailLifeTime: 5; usePerspective: false"></a-entity>
+          <a-text value="ribbon" mixin="label"></a-text>
+        </a-entity-->
       </a-entity>
     </a-scene>
     <!--script>
