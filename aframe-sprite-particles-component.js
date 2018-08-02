@@ -123,6 +123,7 @@
       randomizeFrames: { default: false },
       trailInterval: { default: 0 },
       trailLifeTime: { default: "0" },
+      trailType: { default: "particle", oneOf: ["particle", "ribbon"] },
       emitterColor: { type: "color" },
 
       lifeTime: { default: "1" },
@@ -162,7 +163,7 @@
       transparent: { default: true },
       particleSize: { default: 100 },
       usePerspective: { default: true },
-      seed: { type: "float", default: -1 },
+      seed: { type: "number", default: -1 },
       overTimeSlots: { type: "int", default: 5 },
       frustumCulled: { default: true },
       editorObject: { default: true },
@@ -341,7 +342,7 @@
         const maxAge = maxParticleLifeTime + maxTrailLifeTime
         const particleCount = Math.max( 1, Math.ceil(maxAge*data.spawnRate) )
         this.trailCount = 1 + ( data.trailInterval > 0 ? Math.ceil( Math.min(maxTrailLifeTime, maxParticleLifeTime)/data.trailInterval ) : 0 ) // +1 because the trail includes the lead particle
-        this.count = particleCount * this.trailCount
+        this.count = particleCount * this.trailCount * (this.isRibbon() ? 6 : 1)
 
         this.params[SPAWN_TYPE_PARAM] = data.spawnType === "burst" ? 0 : 1
         this.params[SPAWN_RATE_PARAM] = data.spawnRate
@@ -453,6 +454,10 @@
       }
     },
 
+    isRibbon() {
+      return this.data.trailInterval > 0 && this.data.trailType === "ribbon"
+    },
+
     createMesh() {
       const data = this.data
 
@@ -498,7 +503,13 @@
 
       this.updateDefines()
 
-      this.mesh = new THREE.Points(this.geometry, this.material)
+      if (this.isRibbon()) {
+        this.material.side = THREE.DoubleSide
+        this.mesh = new THREE.Mesh(this.geometry, this.material)
+      } else {
+        this.mesh = new THREE.Points(this.geometry, this.material)
+      }
+
       this.mesh.frustumCulled = data.frustumCulled
       this.mesh.name = this.attrName
       this.material.name = this.mesh.name
@@ -763,7 +774,12 @@
       }
 
       if (data.trailInterval > 0) {
-        defines.USE_PARTICLE_TRAILS = true
+        if (this.isRibbon()) {
+          defines.USE_RIBBON_TRAILS = true
+        }
+        else {
+          defines.USE_PARTICLE_TRAILS = true
+        }
       }
 
       if (data.randomizeFrames) {
@@ -846,6 +862,7 @@
         const changeIDs = data.enable ? this.numEnabled < n : this.numDisabled < n
         const hasSource = data.source && data.source.object3D
         const isUsingModel = this.modelVertices && this.modelVertices.length
+        const isRibbon = this.isRibbon()
 
         let particleVertexID = this.geometry.getAttribute("vertexID")
         let particlePosition = this.geometry.getAttribute("position")
@@ -878,40 +895,46 @@
         // spawnRate is high we will emit several particles per frame
         while (this.nextTime < emitterTime && numSpawned < this.count) {
 
+          if (isUsingModel) {
+            modelFillFn(this.modelVertices, modelPosition)
+          }
+
           // for each particle, update all of its trails. if there are no trails, then
           // trailcount is 1
-          for (let trail = 0; trail < this.trailCount; trail++) {
-            id = this.nextID
-
-            if (isUsingModel) {
-              modelFillFn(this.modelVertices, modelPosition)
-              particlePosition.setXYZ(id, modelPosition.x, modelPosition.y, modelPosition.z)
+          for (let particleVert = 0, particleVertCount = isRibbon ? 6 : 1; particleVert < particleVertCount; particleVert++ ) {
+            for (let trail = 0; trail < this.trailCount; trail++) {
+              id = this.nextID
+  
+              if (isUsingModel) {
+                particlePosition.setXYZ(id, modelPosition.x, modelPosition.y, modelPosition.z)
+              }
+    
+              if (hasSource) {
+                particlePosition.setXYZ(id, position.x, position.y, position.z)
+                particleQuaternion.setXYZW(id, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
+              }
+    
+              if (changeIDs) {
+                particleVertexID.setX(id, data.enable ? id : -1)
+    
+                // if we're enabled then increase the number of enabled and reset the number disabled, once we 
+                // reach this.numEnabled === n, all IDs would have been set and changeIDs will switch to false.
+                // vice versa if we are disabled. these numbers represent the number of consecutive enables or disables.
+                this.numEnabled = data.enable ? this.numEnabled + 1 : 0
+                this.numDisabled = data.enable ? 0 : this.numDisabled + 1
+              }  
+  
+              this.nextID = (this.nextID + 1) % this.count // wrap around to 0 if we'd emitted the last particle in our stack
+              numSpawned++
             }
-  
-            if (hasSource) {
-              particlePosition.setXYZ(id, position.x, position.y, position.z)
-              particleQuaternion.setXYZW(id, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
-            }
-  
-            if (changeIDs) {
-              particleVertexID.setX(id, data.enable ? id : -1)
-  
-              // if we're enabled then increase the number of enabled and reset the number disabled, once we 
-              // reach this.numEnabled === n, all IDs would have been set and changeIDs will switch to false.
-              // vice versa if we are disabled. these numbers represent the number of consecutive enables or disables.
-              this.numEnabled = data.enable ? this.numEnabled + 1 : 0
-              this.numDisabled = data.enable ? 0 : this.numDisabled + 1
-            }  
-
-            this.nextID = (this.nextID + 1) % this.count // wrap around to 0 if we'd emitted the last particle in our stack
-            numSpawned++
           }
 
           this.nextTime += spawnDelta
         }
 
         if (numSpawned > 0) {
-          this.params[ID_PARAM] = Math.floor(id/this.trailCount) // particle ID
+          const trailVertCount = this.trailCount * (isRibbon ? 6 : 1)
+          this.params[ID_PARAM] = Math.floor(id/trailVertCount) // particle ID
 
           if (isBurst) { // if we did burst emit, then wait for maxAge before emitting again
             this.nextTime += this.lifeTime[1]
@@ -1203,6 +1226,16 @@ vec3 applyQuaternion( const vec3 v, const vec4 q )
   return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
 }
 
+vec3 motion( const vec3 v, const vec3 a, const float t )
+{
+  return (v + 0.5 * a * t) * t;
+}
+
+float motion1D( const float v, const float a, const float t )
+{
+  return (v + 0.5 * a * t) * t;
+}
+
 void main() {
 
   float time = params[0].x;
@@ -1222,7 +1255,7 @@ void main() {
   float particleLoopTime = particleCount / spawnRate;
   float motionAge = -1.; // used to determine the age for particle movement
 
-#if defined(USE_PARTICLE_TRAILS)
+#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
   float maxAge = maxParticleLifeTime + maxTrailLifeTime;
 #else
   float maxAge = maxParticleLifeTime;
@@ -1238,7 +1271,11 @@ void main() {
   // for this frame, any vertex IDs after particleID0 are assumed to belong to the previous loop
 
   // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
+#if defined(USE_RIBBON_TRAILS)
+  float rawParticleID = floor( vertexID/6./trailCount );
+#else
   float rawParticleID = floor( vertexID/trailCount );
+#endif
 
 #if PARTICLE_ORDER == 0
   float particleID = particleID0 - (particleCount - 1. - rawParticleID); // newest last
@@ -1274,16 +1311,25 @@ void main() {
     particleAge = -1.;
   } 
 
-#if defined(USE_PARTICLE_TRAILS)
-  // the first trail starts after trailInterval seconds
+#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
   // if trailLifeTime > particleLifeTime then we will use all of the trails and never loop
   // them, so set the trailLoopTime to maxAge. This also means the trailID0 can be larger
   // than trailCount, so we cap it to trailCount - 1
   
   float trailLoopTime = maxTrailLifeTime > trailCount * trailInterval ? maxAge : trailCount * trailInterval;
+
+#if defined(USE_PARTICLE_TRAILS)
+  // trailID0 is +1, so we show both the lead particle and the first trail from the start
+  float trailID0 = min( trailCount - 1., floor( mod( particleAge, trailLoopTime ) / trailInterval ) + 1. );
+#elif defined(USE_RIBBON_TRAILS)
   float trailID0 = min( trailCount - 1., floor( mod( particleAge, trailLoopTime ) / trailInterval ) );
+#endif
+
+#if defined(USE_RIBBON_TRAILS)
+  float rawTrailID = floor( mod( vertexID/6., trailCount ) );
+#else
   float rawTrailID = mod( vertexID, trailCount );
-  float trailLoop = floor( particleAge / trailLoopTime );
+#endif
 
 #if PARTICLE_ORDER == 0
   float trailID = trailID0 - ( trailCount - 1. - rawTrailID ); // newest last
@@ -1293,10 +1339,12 @@ void main() {
   float trailID = rawTrailID > trailID0 ? rawTrailID - trailCount : rawTrailID; // cyclic (original)
 #endif
 
-  float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval + trailInterval;
+  float trailLoop = floor( particleAge / trailLoopTime );
+  float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval;
   float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
 
-  if (particleAge >= 0. && trailStartAge > 0. && trailStartAge < particleLifeTime + trailInterval)
+#if defined(USE_PARTICLE_TRAILS)
+  if (particleAge > -EPSILON && trailStartAge > -EPSILON && trailStartAge < particleLifeTime + EPSILON)
   {
     if (particleAge < trailStartAge)
     {
@@ -1309,10 +1357,29 @@ void main() {
       vOverTimeRatio = (particleAge - trailStartAge)/trailLifeTime;
     }
   }
-#else
+#elif defined(USE_RIBBON_TRAILS)
+  if (particleAge > -EPSILON && trailStartAge > -EPSILON && trailStartAge < particleLifeTime)
+  {
+    if (particleAge > trailStartAge + trailLifeTime)
+    {
+      motionAge = particleAge - trailLifeTime;
+    }
+    else
+    {
+      // to make the oldest trail smoothly move towards the next trail
+      motionAge = trailStartAge;
+    }
+    vOverTimeRatio = (particleAge - motionAge)/trailLifeTime;
+  }
+#endif
+
+
+#else // defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
+
   motionAge = particleAge;
   vOverTimeRatio = particleAge/particleLifeTime;
-#endif // defined(USE_PARTICLE_TRAILS)
+
+#endif // defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
 
   // these checks were around large blocks of code above, but this caused instability
   // in some of the particle systems, so instead we do all of the work, then cancel 
@@ -1336,8 +1403,11 @@ void main() {
 
   vec3 p = vec3(0.); // position
   vec3 v = vec3(0.); // velocity
+  vec3 a = vec3(0.); // acceleration
   vec3 av = vec3(0.); // angular velocity
+  vec3 aa = vec3(0.); // angular acceleration
   float ov = 0.; // orbital velocity
+  float oa = 0.; // orbital acceleration
 
 #if defined(USE_PARTICLE_OFFSET)
   p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
@@ -1348,8 +1418,7 @@ void main() {
 #endif
 
 #if defined(USE_PARTICLE_ACCELERATION)
-  vec3 a = randVec3Range( acceleration[0].xyz, acceleration[1].xyz, seed );
-  v += a*motionAge*.5;
+  a = randVec3Range( acceleration[0].xyz, acceleration[1].xyz, seed );
 #endif
 
 #if defined(USE_PARTICLE_RADIAL_OFFSET) || defined(USE_PARTICLE_RADIAL_VELOCITY) || defined(USE_PARTICLE_RADIAL_ACCELERATION)
@@ -1371,7 +1440,7 @@ void main() {
 #if defined(USE_PARTICLE_RADIAL_ACCELERATION)
   float ar = randFloatRange( acceleration[0].w, acceleration[1].w, seed );
   vec3 a2 = radialToVec3( ar, theta );
-  v += a2*motionAge*.5;
+  a += a2;
 #endif
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY)
@@ -1379,14 +1448,13 @@ void main() {
 #endif
 
 #if defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-  vec3 aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
-  av += aa*.5*motionAge;
+  aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
 #endif
 
-  vec3 transformed = p + v*motionAge;
+  vec3 transformed = p + motion(v, a, motionAge);
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-  transformed = applyQuaternion( transformed, eulerToQuaternion( av * motionAge ) );
+  transformed = applyQuaternion( transformed, eulerToQuaternion( motion(av, aa, motionAge) ) );
 #endif
 
 #if defined(USE_PARTICLE_ORBITAL)
@@ -1395,9 +1463,7 @@ void main() {
   if ( length(p) > EPSILON ) {
     ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
     float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
-    ov += oa*.5*motionAge;
-
-    float angle = ov*motionAge;
+    float angle = motion1D(ov, oa, motionAge);
 
     vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p or 0,0,0
     axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
@@ -1428,14 +1494,14 @@ void main() {
 #endif
 
 
-#if defined(USE_PARTICLE_VELOCITY_SCALE)
+#if defined(USE_PARTICLE_VELOCITY_SCALE) || defined(USE_RIBBON_TRAILS)
   // We repeat all of the motion calculations at motionAge + a small amount (velocityScaleDelta).
   // We convert the current position and the future position in screen space and determine
   // the screen space velocity. VelocityScaleDelta is reasonably small to give better
   // results for the angular and orbital motion, and when drag is applied the effective
   // velocity will tend to 0 as the vOverTimeRatio increases
 
-  float velocityScaleDelta = .1;
+  float velocityScaleDelta = (trailInterval > 0. ? trailInterval : .02);
 
 #if defined(USE_PARTICLE_DRAG)
   float futureT = motionAge + velocityScaleDelta*mix(1., 1. - drag, vOverTimeRatio);
@@ -1443,18 +1509,24 @@ void main() {
   float futureT = motionAge + velocityScaleDelta;
 #endif
 
+#if defined(USE_RIBBON_TRAILS)
+  // forces future trails to always snap to trailIntervals, and never exceed the current time
+  futureT = floor( futureT/trailInterval ) * trailInterval;
+  futureT = min( time - particleStartTime, futureT );
+#endif
+
   vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1. );
 
   // we will determine a future position using the preDestination value, then apply 
   // destination warping as the last step
-  vec3 transformedFuture = p + v*futureT;
+  vec3 transformedFuture = p + motion(v, a, futureT);
 
 #if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-  transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( av*futureT ) );
+  transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( motion(av, aa, futureT) ) );
 #endif
 
 #if defined(USE_PARTICLE_ORBITAL)
-  transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, ov*futureT ) );
+  transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, motion1D(ov, oa, futureT) ) );
 #endif
 
 #if defined(USE_PARTICLE_SOURCE)
@@ -1485,27 +1557,46 @@ void main() {
   // rescale the particle length by the z depth, because perspective will be applied later
   float screenScale = clamp( lenScreen * pos2D.z * velocityScale.x, velocityScale.y, velocityScale.z );
 
-  particleScale *= screenScale; 
-#endif // defined(USE_PARTICLE_VELOCITY_SCALE)
+  particleScale *= screenScale;
+
+#if defined(USE_RIBBON_TRAILS)
+  float ribbonID = mod( vertexID, 6. );
+  if (ribbonID > 2. - EPSILON && ribbonID < 4. + EPSILON) {
+    transformed = transformedFuture;
+  }
+#endif
+
+#endif // defined(USE_PARTICLE_VELOCITY_SCALE) || defined(USE_RIBBON_TRAILS)
 
   vCosSinRotation = vec2( c, s );
 
   // #include <color_vertex>
   // #include <begin_vertex> replaced by code above
   // #include <morphtarget_vertex>
-  #include <project_vertex>
+  // #include <project_vertex>
+
+  vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
+  gl_Position = projectionMatrix * mvPosition;
+
+  float usePerspective = params[2].y;
+
+#if defined(USE_RIBBON_TRAILS)
+  float finalWidth = 0.001 * gl_Position.w * mix( 1., 1. / - mvPosition.z, usePerspective );
+  vec2 normal = finalWidth * vec2( -screen.y, screen.x ) / max(EPSILON, lenScreen);
+  gl_Position.xy += normal * ( mod( ribbonID, 2. ) * 2. - 1. ); // -normal for evens, +normal for odds
+#endif
 
 #if defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
   float screenDepthOffset = params[3].w;
 
-#if defined(USE_PARTICLE_TRAILS)
+#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
   // multiply trailCount by 2 because trailID ranges from [-trailCount, trailCount]
   gl_Position.z -= (particleID*trailCount*2. + trailID)*gl_Position.w*screenDepthOffset/vertexCount;
 #else
   gl_Position.z -= particleID*gl_Position.w*screenDepthOffset/vertexCount;
 #endif
 
-#endif // USE_PARTICLE_SCREEN_DEPTH_OFFSET
+#endif // defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
 
 // vFrame is an int, but we must pass it as a float, so add .5 now and floor() in the
 // fragment shader to ensure there is no rounding error
@@ -1518,10 +1609,11 @@ void main() {
   vFrame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) ) + .5;
 #endif
 
+#if !defined(USE_RIBBON_TRAILS)
   float particleSize = params[2].x;
-  float usePerspective = params[2].y;
 
   gl_PointSize = particleSize * particleScale * mix( 1., 1. / - mvPosition.z, usePerspective );
+#endif
 
   // #include <logdepthbuf_vertex>
   // #include <clipping_planes_vertex>

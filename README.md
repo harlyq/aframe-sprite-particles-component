@@ -230,6 +230,10 @@ generate trails after particles.  If active, the lead particle but will not chan
 
 range value determining the age of each trail.  If this value is 0, then the trail life time is equal to the **lifeTime** attribute.  Trails only appear if **timeInterval** is larger than 0
 
+**trailType** : particle | ribbon = `particle`
+
+the type of trails to use, either particles or a ribbon mesh
+
 **transparent** : boolean = `true`
 
 set to true to make the alpha channel of the texture transparent
@@ -288,14 +292,13 @@ Manging transparency with particle systems can be tricky. Ideally transparent ob
   myScene.renderer.sortObjects = true
 ```
 
-Even when sorting objects is enabled, objects are not sorted against individual particles, and particles from one component are not sorted against particles from another component, so there can still be graphical glitches when objects are close to particle systems.  Sorting can also be problematic for large transparent objects because the sort is looking at the distance between the center of the object and camera. For example, a transparent river may look further away than a tree, but because the origin of the river mesh is actually closer to the camera the river is considered to be closer and is drawn over the top of the tree.
+Even when sorting objects is enabled, objects are not sorted against individual particles, and particles from one component are not sorted against particles from another component, so there can still be graphical glitches when objects are close to particle systems.  Sorting can also be problematic for large transparent objects because the sort is looking at the distance between the center of the object and camera. For example, a transparent river may look further away than a bush, but because the origin of the river mesh is actually closer to the camera the river is considered to be closer and is drawn over the top of the bush.
 
 The renderer determines how things are drawn by looking at the depth buffer for each pixel (**depthTest** is true) and seeing if another object is closer than our object.  If we are closer, then we put our position in the depth buffer (**depthWrite** is true) and draw our pixel; if another object is closer or at the same distance then we don't draw our pixel.  For transparent pixels we additionally only draw the pixel and write to the z-buffer if the alpha value (opacity) is greater than the **alphaTest**.  By default alphaTest is 0, so even mostly transparent pixels (e.g. opacity = 0.1) will still be drawn, and still write to the z-buffer, and thus occlude other pixels at the same distance or further away - which is why it is important to sort transparent objects and draw them from furthest to closest.
 
-Particle systems can involve hundreds of particles, so there are often times when two particles are near each other and are at the same depth from the camera, some one particle will be drawn first and occlude the other particle. To work around this we can:
-* set **depthWrite** to `false`, so particles never occlude each other, but can are occluded by other objects.  However anything drawn after the particles will appear over the top of the particles, so it is important that the objects are sorted correctly.
-* set **alphaTest** higher than 0, which will discard pixels with alpha lower than alphaTest. This is good for objects with a sharp edge e.g. a leaf, but not good for objects that fade out at the edges over several pixels.  Even with alphaTest set a thin outline may appear around the pixels, unless the alphaTest is near 1.
-* if the particle system is setup in 2 dimensions (i.e. one dimension is constant) then add a small variation to the constant dimension. This lessens the chance of particles being the same distance from the camera.
+Particle systems can involve hundreds of particles and there are often times when two particles are near each other, so one particle will be drawn first and occlude the other particle. To work around this we can:
+* set **depthWrite** to `false`, so particles never occlude each other, but can are occluded by other objects.  However transparent objects drawn after the particles will appear over the top of the particles, so it is important that the objects are sorted correctly.
+* set **alphaTest** higher than 0, which will discard pixels with alpha lower than alphaTest. This is good for objects with a sharp edge e.g. a leaf, but poorer results for objects that fade out at the edges over several pixels.  Even with alphaTest set a thin outline may appear around the pixels, unless the alphaTest is near 1.
 
 Once we have fixed particle occlusion there may still be problems with the draw order of the particles.  By default the particleOrder is `original` which means that expired particles will be reused, so a new particle may appear underneath existing particles because it is actually a reused old particle. Workarounds for this are:
 * set **particleOrder** to `newest` so the newest particle is drawn last, but this option is not available when **source** is used
