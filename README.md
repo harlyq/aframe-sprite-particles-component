@@ -1,6 +1,6 @@
 # aframe-sprite-particles-component
 
-[Examples](#Examples) - [Values](#Values) - [Properties](#Properties) - [Limitations](#Limitations) - [Transparency](#Transparency)
+[Examples](#examples) - [Values](#values) - [Properties](#properties) - [Limitations](#limitations) - [Transparency](#transparency)
 
 The **sprite-particles** component uses shader based points geometry to create a set of particles from texture billboards (camera facing textures).  The particles start spawning once the component is created, and will continue until the **duration** expires. Properties can be used to define the position, velocity, acceleration, color, scale and rotation of the particles.
 
@@ -294,7 +294,7 @@ Destinations can be used without a **destination** entity, whereby the **destina
 
 When using **source**, the particles positions are based off of the vector from the particle component's entities' position to the source position, so if the particle component's entity moves, then the whole particle system will move as well.  It is recommended that the particle component's entity does not move when using **source**.
 
-Ribbons use a triangle strip, so each interval on the trail has approximately the same cost as two particles.  Currently they cannot be textured.
+Ribbons use a triangle strip, so each interval on the trail has approximately the same cost as two particles.
 
 For **ribbonShape** we can either pick one of the listed shapes, or we can define a glsl function for the shape by using an `=` as the first character.  The function has one parameter p, which is 0 for the beginning of the trail and 1 for the end of the trail.  For example:
 ```html

@@ -20,6 +20,7 @@
   const TRAIL_COUNT_PARAM = 14 // [3].z
   const SCREEN_DEPTH_OFFSET_PARAM = 15 // [3].w
   const RIBBON_WIDTH_PARAM = 16 // [4].x
+  const RIBBON_UV_MULTIPLIER_PARAM = 17 // [4].y
 
   const MODEL_MESH = "mesh"
   const VERTS_PER_RIBBON = 2
@@ -158,6 +159,7 @@
       modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase },
       direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
       particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
+      ribbonUVMultiplier: { default: 1 },
       screenDepthOffset: { default: 0 },
       alphaTest: { default: 0 }, 
       fog: { default: true },
@@ -241,6 +243,7 @@
       this.params[DRAG_PARAM] = THREE.Math.clamp(data.drag, 0, 1)
       this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5;
       this.params[RIBBON_WIDTH_PARAM] = data.ribbonWidth;
+      this.params[RIBBON_UV_MULTIPLIER_PARAM] = data.ribbonUVMultiplier;
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -455,7 +458,10 @@
       if (filename) {
         let materialSystem = this.el.sceneEl.systems["material"]
         materialSystem.loadTexture(filename, {src: filename}, (texture) => {
-          this.material.uniforms.map.value = texture        
+          if (this.isRibbon()) {
+            texture.wrapS = THREE.RepeatWrapping // needed by ribbonUVMultipler
+          }
+          this.material.uniforms.map.value = texture          
         })
       } else {
         this.material.uniforms.map.value = WHITE_TEXTURE
@@ -1098,8 +1104,9 @@ uniform vec3 velocityScale;
 uniform vec4 destination[2];
 
 varying vec4 vParticleColor;
-varying float vOverTimeRatio;
 varying vec2 vCosSinRotation;
+varying vec2 vUv;
+varying float vOverTimeRatio;
 varying float vFrame;
 
 float VERTS_PER_RIBBON = 2.;
@@ -1361,7 +1368,9 @@ void main() {
 #if defined(USE_PARTICLE_TRAILS)
 
   // +1 beceause we show both the lead particle and the first trail at the start
-  float trailID0 = floor( particleAge / trailInterval ) + 1.;
+  // we cap the particleAge to ensure it never goes past the particleLifeTime
+  float cappedParticleAge = min( particleLifeTime - trailInterval, particleAge );
+  float trailID0 = floor( cappedParticleAge / trailInterval ) + 1.;
   float rawTrailID = mod( vertexID, trailCount );
 
 #if PARTICLE_TRAIL_ORDER == 0
@@ -1392,8 +1401,8 @@ void main() {
 #elif defined(USE_RIBBON_TRAILS)
 
   // +1 to the trailID0 because the ribbon needs two elements to start
-  // we cap the trailID0 to ensure it never goes past the particleLifeTime
-  float cappedParticleAge = min( particleLifeTime, particleAge );
+  // we cap the particleAge to ensure it never goes past the particleLifeTime
+  float cappedParticleAge = min( particleLifeTime - trailInterval, particleAge );
   float trailID0 = floor( cappedParticleAge / trailInterval ) + 1.;
   float rawTrailID = floor( mod( vertexID / VERTS_PER_RIBBON, trailCount ) );
   float trailID = max( 0., trailID0 - ( trailCount - 1. - rawTrailID ) ); // newest last
@@ -1648,6 +1657,12 @@ void main() {
   // #include <clipping_planes_vertex>
   // #include <worldpos_vertex>
   #include <fog_vertex>
+
+#if defined(USE_RIBBON_TRAILS)
+  float ribbonUVMultiplier = params[4].y;
+
+  vUv = vec2( vOverTimeRatio * ribbonUVMultiplier, 1. - ribbonID );
+#endif
 }`
 
   // based upon https://github.com/mrdoob/three.js/blob/master/src/renderers/shaders/ShaderLib/points_frag.glsl
@@ -1664,8 +1679,9 @@ uniform vec4 textureFrames;
 uniform vec3 emitterColor;
 
 varying vec4 vParticleColor;
-varying float vOverTimeRatio;
 varying vec2 vCosSinRotation;
+varying vec2 vUv;
+varying float vOverTimeRatio;
 varying float vFrame;
 
 void main() {
@@ -1705,8 +1721,21 @@ void main() {
 #endif // defined(USE_PARTICLE_ROTATION) || defined(USE_PARTICLE_FRAMES) || defined(USE_PARTICLE_VELOCITY_SCALE)
 
   // #include <logdepthbuf_fragment>
-  #include <map_particle_fragment>
+  // #include <map_particle_fragment>
   // #include <color_fragment>
+
+#ifdef USE_MAP
+
+#if defined(USE_RIBBON_TRAILS)
+  vec2 uv = ( uvTransform * vec3( vUv, 1. ) ).xy;
+#else
+  vec2 uv = ( uvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
+#endif
+
+  vec4 mapTexel = texture2D( map, uv );
+  diffuseColor *= mapTexelToLinear( mapTexel );
+#endif // USE_MAP
+
   #include <alphatest_fragment>
 
   diffuseColor *= vParticleColor;
