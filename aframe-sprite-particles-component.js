@@ -19,6 +19,7 @@
   const PARTICLE_COUNT_PARAM = 13 // [3].y
   const TRAIL_COUNT_PARAM = 14 // [3].z
   const SCREEN_DEPTH_OFFSET_PARAM = 15 // [3].w
+  const RIBBON_WIDTH_PARAM = 16 // [4].x
 
   const MODEL_MESH = "mesh"
   const VERTS_PER_RIBBON = 2
@@ -125,6 +126,8 @@
       trailInterval: { default: 0 },
       trailLifeTime: { default: "0" },
       trailType: { default: "particle", oneOf: ["particle", "ribbon"] },
+      ribbonWidth: { default: 1, },
+      ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase },
       emitterColor: { type: "color" },
 
       lifeTime: { default: "1" },
@@ -193,7 +196,7 @@
       this.orbital = new Float32Array(2*2).fill(0) // x is orbitalVelocity, y is orbitalAcceleration
       this.colorOverTime // color is xyz and opacity is w. created in update()
       this.rotationScaleOverTime // x is rotation, y is scale. created in update()
-      this.params = new Float32Array(4*4).fill(0) // see ..._PARAM constants
+      this.params = new Float32Array(5*4).fill(0) // see ..._PARAM constants
       this.velocityScale = new Float32Array(3).fill(0) // x is velocityScale, y is velocityScaleMinMax.x and z is velocityScaleMinMax.y
       this.emitterColor = new THREE.Vector3() // use vec3 for color
       this.destination = new Float32Array(2*4).fill(0) // range value, xyz is destinationEntity.position + destinationOffset, w is destinationWeight
@@ -237,6 +240,7 @@
       this.params[DIRECTION_PARAM] = data.direction === "forward" ? 0 : 1
       this.params[DRAG_PARAM] = THREE.Math.clamp(data.drag, 0, 1)
       this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5;
+      this.params[RIBBON_WIDTH_PARAM] = data.ribbonWidth;
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -803,6 +807,18 @@
         defines.USE_PARTICLE_RANDOMIZE_FRAMES = true
       }
 
+      let ribbonShapeFunction = "1."
+      if (data.ribbonShape === "taperout") {
+        ribbonShapeFunction = "1. - p"
+      } else if (data.ribbonShape === "taperin") {
+        ribbonShapeFunction = "p"
+      } else if (data.ribbonShape === "taper") {
+        ribbonShapeFunction = "2. * ( p < .5 ? p : 1. - p )"
+      } else if (data.ribbonShape[0] === "=") {
+        ribbonShapeFunction = data.ribbonShape.slice(1)
+      }
+      defines.RIBBON_SHAPE_FUNCTION = ribbonShapeFunction
+
       if (data.source) {
         defines.PARTICLE_ORDER = 2
       } else {
@@ -1068,7 +1084,7 @@ attribute float vertexID;
 attribute vec4 quaternion;
 #endif
 
-uniform vec4 params[4];
+uniform vec4 params[5];
 uniform vec4 offset[2];
 uniform vec4 velocity[2];
 uniform vec4 acceleration[2];
@@ -1258,6 +1274,11 @@ vec3 motion( const vec3 v, const vec3 a, const float t )
 float motion1D( const float v, const float a, const float t )
 {
   return (v + 0.5 * a * t) * t;
+}
+
+float ribbonShape( const float p )
+{
+  return RIBBON_SHAPE_FUNCTION;
 }
 
 void main() {
@@ -1588,9 +1609,10 @@ void main() {
 
 #if defined(USE_RIBBON_TRAILS)
   float ribbonID = mod( vertexID, VERTS_PER_RIBBON );
-  float finalWidth = 0.001 * gl_Position.w * mix( 1., 1. / - mvPosition.z, usePerspective );
-  vec2 normal = finalWidth * vec2( -screen.y, screen.x ) / max(EPSILON, lenScreen);
-  gl_Position.xy += normal * ( mod( ribbonID, 2. ) * 2. - 1. ); // -normal for evens, +normal for odds
+  float ribbonWidth = params[4].x * ribbonShape( vOverTimeRatio );
+  float halfWidth = ribbonWidth * mix( 1., 1. / - mvPosition.z, usePerspective ) * 0.5;
+  vec2 normal = halfWidth * vec2( -screen.y, screen.x ) / max( EPSILON, lenScreen );
+  gl_Position.xy += normal * ( ribbonID * 2. - 1. ); // -normal for ribbonID 0, +normal for ribbonID 1
 #endif
 
 #if defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
@@ -1690,7 +1712,7 @@ void main() {
   diffuseColor *= vParticleColor;
   outgoingLight = diffuseColor.rgb;
 
-  gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+  gl_FragColor = diffuseColor;
 
   // #include <premultiplied_alpha_fragment>
   // #include <tonemapping_fragment>

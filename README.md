@@ -4,6 +4,8 @@
 
 The **sprite-particles** component uses shader based points geometry to create a set of particles from texture billboards (camera facing textures).  The particles start spawning once the component is created, and will continue until the **duration** expires. Properties can be used to define the position, velocity, acceleration, color, scale and rotation of the particles.
 
+The component also supports trails of particles or ribbons.
+
 For a demo goto https://harlyq.github.io/aframe-sprite-particles-component/
 
 ![Screenshot](assets/screenshot.jpg)
@@ -178,6 +180,14 @@ range for a radial speed from the local origin
 
 replaced by **source**
 
+**ribbonShape** : flat | taperin | taperout | taper = `flat`
+
+define the shape of the ribbon
+
+**ribbonWidth** : number = `1`
+
+width of ribbon trails. 1 is the default, use smaller numbers for a thinner ribbon, and larger numbers for a thicker ribbon.
+
 **rotation** : number range array = `0`
 
 over-time ranges for the particle rotation counterclockwise about the XY plane. all rotations are from min range to max range, and in degrees
@@ -283,6 +293,14 @@ Destinations can be used without a **destination** entity, whereby the **destina
 **screenDepthOffset** can be useful to make new particles appear in front of old particles, but because it is hacking the screen depth of each particle, it can give odd results when looking at the particles from an angle.  The offset is multiplied by the particleID, so having many particles will result in large offsets, which can result in particles disappearing or appearing incorrectly around nearby objects.  Try using small offsets to get the desired effect.
 
 When using **source**, the particles positions are based off of the vector from the particle component's entities' position to the source position, so if the particle component's entity moves, then the whole particle system will move as well.  It is recommended that the particle component's entity does not move when using **source**.
+
+Ribbons use a triangle strip, so each interval on the trail has approximately the same cost as two particles.  Currently they cannot be textured.
+
+For **ribbonShape** we can either pick one of the listed shapes, or we can define a glsl function for the shape by using an `=` as the first character.  The function has one parameter p, which is 0 for the beginning of the trail and 1 for the end of the trail.  For example:
+```html
+ribbonShape: =1. - p
+```
+will generate a ribbon shape which is 0 at the beginning of the trail, getting larger until it reaches 1 at the end of the trail.  If the function provided is invalid glsl, an error will be sent to the console and the particle system will not be shown.
 
 ## Transparency
 
