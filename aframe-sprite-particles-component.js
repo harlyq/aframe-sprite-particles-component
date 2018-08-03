@@ -204,7 +204,6 @@
       this.numDisabled = 0
       this.numEnabled = 0
       this.manageIDs = false
-      this.particleOrder = 'original' // sanitized version of data.particleOrder
 
       this.params[ID_PARAM] = -1 // unmanaged IDs
     },
@@ -370,10 +369,8 @@
         if (data.model) { data.model.addEventListener("object3dset", this.handleObject3DSet) }
       }
 
-      this.particleOrder = data.particleOrder
       if (data.particleOrder !== "original" && data.source) {
-        console.warn(`changing particleOrder to 'original' (was '${data.particleOrder}'), because particles have a source`)
-        this.particleOrder = "original"
+        console.warn(`changing particleOrder to 'original' (was '${data.particleOrder}'), because particles use a source`)
       }
 
       if (!this.mesh) {
@@ -806,7 +803,12 @@
         defines.USE_PARTICLE_RANDOMIZE_FRAMES = true
       }
 
-      defines.PARTICLE_ORDER = PARTICLE_ORDER_STRINGS.indexOf(this.particleOrder)
+      if (data.source) {
+        defines.PARTICLE_ORDER = 2
+      } else {
+        defines.PARTICLE_ORDER = PARTICLE_ORDER_STRINGS.indexOf(data.particleOrder)
+      }
+      defines.PARTICLE_TRAIL_ORDER = PARTICLE_ORDER_STRINGS.indexOf(data.particleOrder)
 
       const extraDefines = Object.keys(defines).filter(b => this.material.defines[b] !== defines[b])
 
@@ -1337,27 +1339,21 @@ void main() {
 
 #if defined(USE_PARTICLE_TRAILS)
 
-  // if trailLifeTime > particleLifeTime then we will use all of the trails and never loop
-  // them, so set the trailLoopTime to maxAge. This also means the trailID0 can be larger
-  // than trailCount, so we cap it to trailCount - 1
-  
-  float trailLoopTime = maxTrailLifeTime > trailCount * trailInterval ? maxAge : trailCount * trailInterval;
-
-  // trailID0 is +1, so we show both the lead particle and the first trail from the start
-  float trailID0 = min( trailCount - 1., floor( mod( particleAge, trailLoopTime ) / trailInterval ) + 1. );
+  // +1 beceause we show both the lead particle and the first trail at the start
+  float trailID0 = floor( particleAge / trailInterval ) + 1.;
   float rawTrailID = mod( vertexID, trailCount );
 
-#if PARTICLE_ORDER == 0
+#if PARTICLE_TRAIL_ORDER == 0
   float trailID = trailID0 - ( trailCount - 1. - rawTrailID ); // newest last
-#elif PARTICLE_ORDER == 1
+#elif PARTICLE_TRAIL_ORDER == 1
   float trailID = trailID0 - rawTrailID; // oldest last
 #else
-  float trailID = rawTrailID > trailID0 ? rawTrailID - trailCount : rawTrailID; // cyclic (original)
+  float trailID = floor( trailID0 / trailCount ) * trailCount;
+  trailID += rawTrailID > mod( trailID0, trailCount ) ? rawTrailID - trailCount : rawTrailID; // cyclic (original)
 #endif
 
-  float trailLoop = floor( particleAge / trailLoopTime );
-  float trailStartAge = trailLoop * trailLoopTime + trailID * trailInterval;
- 
+  float trailStartAge = trailID * trailInterval;
+  
   if (particleAge > -EPSILON && trailStartAge > -EPSILON && trailStartAge < particleLifeTime + EPSILON)
   {
     if (particleAge < trailStartAge)
@@ -1602,7 +1598,7 @@ void main() {
 
 #if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
   // multiply trailCount by 2 because trailID ranges from [-trailCount, trailCount]
-  gl_Position.z -= (particleID*trailCount*2. + trailID)*gl_Position.w*screenDepthOffset/vertexCount;
+  gl_Position.z -= (particleID*trailCount*2. + trailID - trailID0)*gl_Position.w*screenDepthOffset/vertexCount;
 #else
   gl_Position.z -= particleID*gl_Position.w*screenDepthOffset/vertexCount;
 #endif
