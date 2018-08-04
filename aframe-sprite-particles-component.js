@@ -21,6 +21,7 @@
   const SCREEN_DEPTH_OFFSET_PARAM = 15 // [3].w
   const RIBBON_WIDTH_PARAM = 16 // [4].x
   const RIBBON_UV_MULTIPLIER_PARAM = 17 // [4].y
+  const RIBBON_UV_TYPE_PARAM = 18 // [4].z
 
   const MODEL_MESH = "mesh"
   const VERTS_PER_RIBBON = 2
@@ -53,6 +54,7 @@
     source: "USE_PARTICLE_SOURCE",
   }
 
+  const UV_TYPE_STRINGS = ["overtime", "interval"]
   const PARTICLE_ORDER_STRINGS = ["newest", "oldest", "original"]
   const AXES_NAMES = ["x", "y", "z"]
 
@@ -129,6 +131,7 @@
       trailType: { default: "particle", oneOf: ["particle", "ribbon"] },
       ribbonWidth: { default: 1, },
       ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase },
+      ribbonUVType: { default: "overtime", oneOf: UV_TYPE_STRINGS, parse: toLowerCase },
       emitterColor: { type: "color" },
 
       lifeTime: { default: "1" },
@@ -244,6 +247,7 @@
       this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5;
       this.params[RIBBON_WIDTH_PARAM] = data.ribbonWidth;
       this.params[RIBBON_UV_MULTIPLIER_PARAM] = data.ribbonUVMultiplier;
+      this.params[RIBBON_UV_TYPE_PARAM] = UV_TYPE_STRINGS.indexOf(data.ribbonUVType) === -1 ? 0 : UV_TYPE_STRINGS.indexOf(data.ribbonUVType);
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -518,7 +522,8 @@
       this.updateDefines()
 
       if (this.isRibbon()) {
-        this.material.side = THREE.DoubleSide
+        // // this.material.side = THREE.DoubleSide
+        // this.material.side = THREE.FrontSide
         this.mesh = new THREE.Mesh(this.geometry, [this.material]) // geometry groups need an array of materials
         this.mesh.drawMode = THREE.TriangleStripDrawMode
       } else {
@@ -1273,12 +1278,12 @@ vec3 applyQuaternion( const vec3 v, const vec4 q )
   return v + 2. * cross( q.xyz, cross( q.xyz, v ) + q.w * v );
 }
 
-vec3 motion( const vec3 v, const vec3 a, const float t )
+vec3 displacement( const vec3 v, const vec3 a, const float t )
 {
   return (v + 0.5 * a * t) * t;
 }
 
-float motion1D( const float v, const float a, const float t )
+float displacement1D( const float v, const float a, const float t )
 {
   return (v + 0.5 * a * t) * t;
 }
@@ -1286,6 +1291,36 @@ float motion1D( const float v, const float a, const float t )
 float ribbonShape( const float p )
 {
   return RIBBON_SHAPE_FUNCTION;
+}
+
+vec3 particleMotion( const vec3 p, const vec3 v, const vec3 a, const vec3 av, const vec3 aa, const vec3 axis, const float ov, const float oa, const vec3 dest, const float weight, const float t )
+{
+  vec3 pos = p + displacement(v, a, t);
+
+#if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
+  pos = applyQuaternion( pos, eulerToQuaternion( displacement(av, aa, t) ) );
+#endif
+
+#if defined(USE_PARTICLE_ORBITAL)
+  pos = applyQuaternion( pos, axisAngleToQuaternion( axis, displacement1D(ov, oa, t) ) );
+#endif
+
+#if defined(USE_PARTICLE_SOURCE)
+  pos = applyQuaternion( pos, quaternion );
+#endif
+
+pos += position;
+
+#if defined(USE_PARTICLE_DESTINATION)
+  pos = mix( pos, dest, weight );
+#endif
+
+  return pos;
+}
+
+vec2 toScreen( const vec4 clipSpacePos )
+{
+  return clipSpacePos.xy / clipSpacePos.w;
 }
 
 void main() {
@@ -1455,8 +1490,11 @@ void main() {
   vec3 a = vec3(0.); // acceleration
   vec3 av = vec3(0.); // angular velocity
   vec3 aa = vec3(0.); // angular acceleration
+  vec3 axis = vec3( 1., 0., 0. ); // axis of orbital motion
   float ov = 0.; // orbital velocity
   float oa = 0.; // orbital acceleration
+  vec3 dest = vec3(0.); // destination position
+  float destWeight = 0.; // destination weighting
 
 #if defined(USE_PARTICLE_OFFSET)
   p = randVec3Range( offset[0].xyz, offset[1].xyz, seed );
@@ -1500,57 +1538,39 @@ void main() {
   aa = randVec3Range( angularAcceleration[0].xyz, angularAcceleration[1].xyz, seed );
 #endif
 
-  vec3 transformed = p + motion(v, a, motionAge);
-
-#if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-  transformed = applyQuaternion( transformed, eulerToQuaternion( motion(av, aa, motionAge) ) );
-#endif
-
 #if defined(USE_PARTICLE_ORBITAL)
-  vec3 axis = vec3( 1., 0., 0. );
-
   if ( length(p) > EPSILON ) {
     ov = randFloatRange( orbital[0].x, orbital[1].x, seed );
     float oa = randFloatRange( orbital[0].y, orbital[1].y, seed );
-    float angle = motion1D(ov, oa, motionAge);
+    float angle = displacement1D(ov, oa, motionAge);
 
     vec3 randomOribit = vec3( random( seed ), random( seed ), random( seed ) ); // should never equal p or 0,0,0
     axis = normalize( cross( normalize( p ), normalize( randomOribit ) ) );
-
-    transformed = applyQuaternion( transformed, axisAngleToQuaternion( axis, angle ) );
   }
 #endif
 
+#if defined(USE_PARTICLE_DESTINATION)
+  destWeight = randFloatRange( destination[0].w, destination[1].w, seed );
+  dest = randVec3Range( destination[0].xyz, destination[1].xyz, seed );
+#endif
+
+  vec3 transformed = particleMotion( p, v, a, av, aa, axis, ov, oa, dest, motionAge/particleLifeTime*destWeight, motionAge );
+
   vec2 rotScale = calcRotationScaleOverTime( vOverTimeRatio, seed );
   float particleScale = rotScale.y;
-
-  vParticleColor = calcColorOverTime( vOverTimeRatio, seed ); // rgba format
-
   float c = cos( rotScale.x );
   float s = sin( rotScale.x );
 
-#if defined(USE_PARTICLE_SOURCE)
-  transformed = applyQuaternion( transformed, quaternion );
-#endif
+  vParticleColor = calcColorOverTime( vOverTimeRatio, seed ); // rgba format
 
-  transformed += position;
-
-#if defined(USE_PARTICLE_DESTINATION)
-  float destinationWeight = randFloatRange( destination[0].w, destination[1].w, seed );
-  vec3 destinationPos = randVec3Range( destination[0].xyz, destination[1].xyz, seed );
-  
-  transformed = mix( transformed, destinationPos, motionAge/particleLifeTime*destinationWeight );
-#endif
-
-
-#if defined(USE_PARTICLE_VELOCITY_SCALE) || defined(USE_RIBBON_TRAILS)
-  // We repeat all of the motion calculations at motionAge + a small amount (velocityScaleDelta).
+#if defined(USE_PARTICLE_VELOCITY_SCALE)
+  // We repeat all of the displacement calculations at motionAge + a small amount (velocityScaleDelta).
   // We convert the current position and the future position in screen space and determine
   // the screen space velocity. VelocityScaleDelta is reasonably small to give better
-  // results for the angular and orbital motion, and when drag is applied the effective
+  // results for the angular and orbital displacement, and when drag is applied the effective
   // velocity will tend to 0 as the vOverTimeRatio increases
 
-  float velocityScaleDelta = (trailInterval > 0. ? trailInterval : .02);
+  float velocityScaleDelta = .02;
 
 #if defined(USE_PARTICLE_DRAG)
   float futureT = motionAge + velocityScaleDelta*mix(1., 1. - drag, vOverTimeRatio);
@@ -1560,31 +1580,11 @@ void main() {
 
   vec4 pos2D = projectionMatrix * modelViewMatrix * vec4( transformed, 1. );
 
-  // we will determine a future position using the preDestination value, then apply 
-  // destination warping as the last step
-  vec3 transformedFuture = p + motion(v, a, futureT);
-
-#if defined(USE_PARTICLE_ANGULAR_VELOCITY) || defined(USE_PARTICLE_ANGULAR_ACCELERATION)
-  transformedFuture = applyQuaternion( transformedFuture, eulerToQuaternion( motion(av, aa, futureT) ) );
-#endif
-
-#if defined(USE_PARTICLE_ORBITAL)
-  transformedFuture = applyQuaternion( transformedFuture, axisAngleToQuaternion( axis, motion1D(ov, oa, futureT) ) );
-#endif
-
-#if defined(USE_PARTICLE_SOURCE)
-  transformedFuture = applyQuaternion( transformedFuture, quaternion );
-#endif
-
-  transformedFuture += position;
-
-#if defined(USE_PARTICLE_DESTINATION)
   // use min(1) to ensure the particle stops at the destination position
-  transformedFuture = mix( transformedFuture, destinationPos, min( 1., futureT/particleLifeTime )*destinationWeight );
-#endif
-
+  vec3 transformedFuture = particleMotion( p, v, a, av, aa, axis, ov, oa, dest, min( 1., futureT/particleLifeTime )*destWeight, futureT );
 
   vec4 pos2DFuture = projectionMatrix * modelViewMatrix * vec4( transformedFuture, 1. );
+
   vec2 screen = pos2DFuture.xy / pos2DFuture.z - pos2D.xy / pos2D.z; // TODO divide by 0?
   screen /= velocityScaleDelta; // gives screen units per second
 
@@ -1602,14 +1602,14 @@ void main() {
 
   particleScale *= screenScale;
 
-#endif // defined(USE_PARTICLE_VELOCITY_SCALE) || defined(USE_RIBBON_TRAILS)
+#endif // defined(USE_PARTICLE_VELOCITY_SCALE)
 
   vCosSinRotation = vec2( c, s );
 
   // #include <color_vertex>
   // #include <begin_vertex> replaced by code above
   // #include <morphtarget_vertex>
-  // #include <project_vertex>
+  // #include <project_vertex> replaced below
 
   vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
   gl_Position = projectionMatrix * mvPosition;
@@ -1618,10 +1618,23 @@ void main() {
 
 #if defined(USE_RIBBON_TRAILS)
   float ribbonID = mod( vertexID, VERTS_PER_RIBBON );
-  float ribbonWidth = params[4].x * ribbonShape( vOverTimeRatio );
-  float halfWidth = ribbonWidth * mix( 1., 1. / - mvPosition.z, usePerspective ) * 0.5;
-  vec2 normal = halfWidth * vec2( -screen.y, screen.x ) / max( EPSILON, lenScreen );
-  gl_Position.xy += normal * ( ribbonID * 2. - 1. ); // -normal for ribbonID 0, +normal for ribbonID 1
+  
+  {
+    mat4 m = projectionMatrix * modelViewMatrix;
+    vec2 curr = toScreen( gl_Position );
+
+    float nextT = motionAge + trailInterval;
+    vec3 nextPosition = particleMotion( p, v, a, av, aa, axis, ov, oa, dest, min( 1., nextT/particleLifeTime )*destWeight, nextT );
+    vec2 next2D = toScreen( m * vec4( nextPosition, 1. ) ) - curr;
+
+    vec2 dir = normalize( next2D );
+    vec2 normal = vec2( -dir.y, dir.x );
+
+    float ribbonWidth = params[4].x * ribbonShape( vOverTimeRatio );
+    float halfWidth = .5 * ribbonWidth * mix( 1., 1. / - mvPosition.z, usePerspective );
+  
+    gl_Position.xy += halfWidth * normal * ( 1. - ribbonID * 2. ); // +normal for ribbonID 0, -normal for ribbonID 1
+  }
 #endif
 
 #if defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
@@ -1660,8 +1673,9 @@ void main() {
 
 #if defined(USE_RIBBON_TRAILS)
   float ribbonUVMultiplier = params[4].y;
+  float ribbonUVType = params[4].z;
 
-  vUv = vec2( vOverTimeRatio * ribbonUVMultiplier, 1. - ribbonID );
+  vUv = vec2( mix( 1. - vOverTimeRatio, motionAge/trailInterval, ribbonUVType ) * ribbonUVMultiplier, 1. - ribbonID );
 #endif
 }`
 

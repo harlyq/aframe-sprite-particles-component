@@ -184,6 +184,14 @@ replaced by **source**
 
 define the shape of the ribbon
 
+**ribbonUVMultipler** : number = `1`
+
+repeat the UVs along a ribbon, a value of 2 will repeat the texture twice, and 0.5 will halve the texture
+
+**ribbonUVType** : overtime | interval = `overtime`
+
+the `overtime` type will spread the texture over the whole trail, with the right-most part of the texture appearing at time 0, and the left-most at lifeTime of the particle. `interval` will repeat the UVs every **trailInterval** seconds.  The UVs are also modified by the **ribbonUVMultipler**
+
 **ribbonWidth** : number = `1`
 
 width of ribbon trails. 1 is the default, use smaller numbers for a thinner ribbon, and larger numbers for a thicker ribbon.
@@ -294,7 +302,7 @@ Destinations can be used without a **destination** entity, whereby the **destina
 
 When using **source**, the particles positions are based off of the vector from the particle component's entities' position to the source position, so if the particle component's entity moves, then the whole particle system will move as well.  It is recommended that the particle component's entity does not move when using **source**.
 
-Ribbons use a triangle strip, so each interval on the trail has approximately the same cost as two particles.
+Ribbons provide a screen space line (can be textured) that follow a particle's path. Wide ribbons will appear twisted when they change direction quickly because the ribbon cannot fit in the space on the screen. They have a higher GPU cost than particles.
 
 For **ribbonShape** we can either pick one of the listed shapes, or we can define a glsl function for the shape by using an `=` as the first character.  The function has one parameter p, which is 0 for the beginning of the trail and 1 for the end of the trail.  For example:
 ```html

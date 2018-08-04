@@ -344,13 +344,17 @@
           <a-text value="short ribbon" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-16 -12 0">
-          <a-entity sprite-particles="texture: assets/numbered_4x4_256x256.png; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 4; spawnRate: .1; ribbonUVMUltiplier: 2; trailInterval: 0.2; trailType: ribbon; usePerspective: false"></a-entity>
+          <a-entity sprite-particles="texture: assets/numbered_2x2_64x64.png; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; ribbonUVMUltiplier: -1; trailInterval: 0.2; trailType: ribbon; ribbonWidth: 20"></a-entity>
           <a-text value="textured ribbon" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="-20 -12 0">
+          <a-entity sprite-particles="texture: assets/frame.png; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 4..6; color: yellow, red; spawnRate: 1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon; ribbonWidth: 2"></a-entity>
+          <a-text value="textured interval" mixin="label"></a-text>
         </a-entity>
       </a-entity>
       <!--a-entity position="0 0 -4">
         <a-entity position="0 0 0">
-          <a-entity sprite-particles="texture: assets/numbered_4x4_256x256.png; position: -1 0 0..1 0 0; velocity: -0.5 1 -0.5..0.5 1 0.5; acceleration: 0 -0.5 0; ribbonWidth: 2; ribbonShape2: taperout; lifeTime: 7; spawnRate: 0.1; trailInterval: 0.1; trailType: ribbon; ribbonUVMultiplier2: 2; trailLifeTime2: 1; color: red,blue; opacity2: 1,0; usePerspective2: false"></a-entity>
+          <a-entity sprite-particles="texture: assets/frame.png; ribbonUVType: interval; texture2: assets/numbered_4x4_256x256.png; velocity: -0.5 1 -0.5..0.5 1 0.5; acceleration: 0 -0.5 0; ribbonWidth: 0.5; ribbonShape2: taperout; lifeTime: 7; spawnRate: 1; trailInterval: 0.1; trailType: ribbon; ribbonUVMultiplier2: 2; trailLifeTime2: 1; color: red,blue; opacity2: 1,0; usePerspective2: false"></a-entity>
           <a-text value="ribbon" mixin="label"></a-text>
         </a-entity>
       </a-entity-->
