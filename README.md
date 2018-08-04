@@ -168,9 +168,9 @@ range for an acceleration from the local origin
 
 range for offseting the start position from the local origin
 
-**radialType** : circle | sphere = `circle`
+**radialType** : circle | sphere | circlexy | circlexz = `circle`
 
-shape for radial parameters, either a circle in XY or a sphere
+shape for radial parameters. can be a circle in XY (`circle` or `circlexy`), a circle in xz (`circlexy`) or a sphere
 
 **radialVelocity** : number range = `0`
 

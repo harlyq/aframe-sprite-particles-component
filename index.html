@@ -86,7 +86,7 @@
           <a-text value="acceleration" mixin="label"></a-text>
         </a-entity>
         <a-entity position="8 8 0">
-          <a-entity sprite-particles="texture: assets/blob.png; spawnRate: 100; lifeTime: .5; radialVelocity: 1; radialAcceleration: 2; scale: .5"></a-entity>
+          <a-entity sprite-particles="spawnRate: 500; lifeTime: .1 .. .2; radialType: sphere; radialVelocity: 2..10; trailLifeTime: .1; trailInterval: .1; trailType: ribbon; ribbonWidth: .5; ribbonShape: taper; blending: additive"></a-entity>
           <a-text value="sparkler" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-4 -4 0">
@@ -344,12 +344,25 @@
           <a-text value="short ribbon" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-16 -12 0">
-          <a-entity sprite-particles="texture: assets/numbered_2x2_64x64.png; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; ribbonUVMUltiplier: -1; trailInterval: 0.2; trailType: ribbon; ribbonWidth: 20"></a-entity>
+          <a-entity sprite-particles="texture: assets/numbered_2x2_64x64.png; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; trailInterval: 0.2; trailType: ribbon; ribbonWidth: 20"></a-entity>
           <a-text value="textured ribbon" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 -12 0">
           <a-entity sprite-particles="texture: assets/frame.png; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 4..6; color: yellow, red; spawnRate: 1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon; ribbonWidth: 2"></a-entity>
           <a-text value="textured interval" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="12 -12 0">
+          <a-entity sprite-particles="seed: 0.5; radialType: sphere; radialPosition: 1; orbitalVelocity: 200; lifeTime: 4..6; spawnRate: 0.5; texture: assets/blob.png; color: yellow, white; opacity: 1,0; particleSize: 200"></a-entity>
+          <a-entity sprite-particles="seed: 0.5; radialType: sphere; radialPosition: 1; orbitalVelocity: 200; lifeTime: 4..6; spawnRate: 0.5; trailLifeTime: 0.5..2; color: yellow, red; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon; ribbonWidth: 0.5; opacity: 1,0"></a-entity>
+          <a-text value="common seed" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="8 12 0">
+          <a-entity sprite-particles="radialType: circleXY; spawnType: burst; spawnRate: 100; radialPosition: 1"></a-entity>
+          <a-text value="circleXY" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="12 12 0">
+          <a-entity sprite-particles="radialType: circleXZ; spawnType: burst; spawnRate: 100; radialPosition: 1"></a-entity>
+          <a-text value="circleXZ" mixin="label"></a-text>
         </a-entity>
       </a-entity>
       <!--a-entity position="0 0 -4">

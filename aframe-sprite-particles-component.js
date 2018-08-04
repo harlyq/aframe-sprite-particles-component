@@ -5,7 +5,7 @@
 
   const TIME_PARAM = 0 // [0].x
   const ID_PARAM = 1 // [0].y
-  const RADIAL_PARAM = 2 // [0].z
+  const RADIAL_X_PARAM = 2 // [0].z
   const DURATION_PARAM = 3 // [0].w
   const SPAWN_TYPE_PARAM = 4 // [1].x
   const SPAWN_RATE_PARAM = 5 // [1].y
@@ -22,6 +22,7 @@
   const RIBBON_WIDTH_PARAM = 16 // [4].x
   const RIBBON_UV_MULTIPLIER_PARAM = 17 // [4].y
   const RIBBON_UV_TYPE_PARAM = 18 // [4].z
+  const RADIAL_Y_PARAM = 19 // [4].w
 
   const MODEL_MESH = "mesh"
   const VERTS_PER_RIBBON = 2
@@ -138,7 +139,7 @@
       position: { default: "0 0 0" },
       velocity: { default: "0 0 0" },
       acceleration: { default: "0 0 0" },
-      radialType: { default: "circle", oneOf: ["circle", "sphere"], parse: toLowerCase },
+      radialType: { default: "circle", oneOf: ["circle", "sphere", "circlexy", "circlexz"], parse: toLowerCase },
       radialPosition: { default: "0" },
       radialVelocity: { default: "0" },
       radialAcceleration: { default: "0" },
@@ -241,13 +242,11 @@
 
       this.params[PARTICLE_SIZE_PARAM] = data.particleSize
       this.params[USE_PERSPECTIVE_PARAM] = data.usePerspective ? 1 : 0
-      this.params[RADIAL_PARAM] = data.radialType === "circle" ? 0 : 1
       this.params[DIRECTION_PARAM] = data.direction === "forward" ? 0 : 1
       this.params[DRAG_PARAM] = THREE.Math.clamp(data.drag, 0, 1)
       this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5;
       this.params[RIBBON_WIDTH_PARAM] = data.ribbonWidth;
       this.params[RIBBON_UV_MULTIPLIER_PARAM] = data.ribbonUVMultiplier;
-      this.params[RIBBON_UV_TYPE_PARAM] = UV_TYPE_STRINGS.indexOf(data.ribbonUVType) === -1 ? 0 : UV_TYPE_STRINGS.indexOf(data.ribbonUVType);
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -269,6 +268,15 @@
       if (data.seed !== oldData.seed) {
         this.seed = data.seed
         this.params[SEED_PARAM] = data.seed >= 0 ? data.seed : Math.random()
+      }
+
+      if (data.ribbonUVType !== oldData.ribbonUVType) {
+        this.params[RIBBON_UV_TYPE_PARAM] = UV_TYPE_STRINGS.indexOf(data.ribbonUVType) === -1 ? 0 : UV_TYPE_STRINGS.indexOf(data.ribbonUVType);
+      }
+
+      if (data.radialType !== oldData.radialType) {
+        this.params[RADIAL_X_PARAM] = ["sphere", "circlexy", "circle"].includes(data.radialType) ? 1 : 0
+        this.params[RADIAL_Y_PARAM] = ["sphere", "circlexz"].includes(data.radialType) ? 1 : 0
       }
 
       if (this.mesh && data.frustumCulled !== oldData.frustumCulled) {
@@ -1327,7 +1335,8 @@ void main() {
 
   float time = params[0].x;
   float cpuID = params[0].y;
-  float radialType = params[0].z;
+  float radialTypeX = params[0].z;
+  float radialTypeY = params[4].w;
   float duration = params[0].w;
   float spawnType = params[1].x;
   float spawnRate = params[1].y;
@@ -1479,12 +1488,6 @@ void main() {
   motionAge = mix( .5*drag*vOverTimeRatio, 1. - .5*drag, vOverTimeRatio ) * particleLifeTime;
 #endif
 
-  vec2 radialDir = vec2( 1., radialType );
-
-  vec2 ANGLE_RANGE[2];
-  ANGLE_RANGE[0] = vec2( 0., 0. ) * radialDir;
-  ANGLE_RANGE[1] = vec2( 2.*PI, 2.*PI ) * radialDir;
-
   vec3 p = vec3(0.); // position
   vec3 v = vec3(0.); // velocity
   vec3 a = vec3(0.); // acceleration
@@ -1509,6 +1512,11 @@ void main() {
 #endif
 
 #if defined(USE_PARTICLE_RADIAL_OFFSET) || defined(USE_PARTICLE_RADIAL_VELOCITY) || defined(USE_PARTICLE_RADIAL_ACCELERATION)
+  vec2 ANGLE_RANGE[2];
+  vec2 radialDir = vec2( radialTypeX, radialTypeY );
+  ANGLE_RANGE[0] = vec2( 0., 0. ) * radialDir;
+  ANGLE_RANGE[1] = vec2( 2.*PI, 2.*PI ) * radialDir;
+
   vec2 theta = randVec2Range( ANGLE_RANGE[0], ANGLE_RANGE[1], seed );
 #endif
 
