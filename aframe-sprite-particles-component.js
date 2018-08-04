@@ -119,6 +119,7 @@
     schema: {
       enableInEditor: { default: false },
       texture: { type: "map" },
+      delay: { default: 0 },
       duration: { default: -1 },
       spawnType: { default: "continuous", oneOf: ["continuous", "burst"], parse: toLowerCase },
       spawnRate: { default: 10 },
@@ -159,6 +160,7 @@
       destinationWeight: { default: "0" },
 
       enable: { default: true },
+      emitterTime: { default: 0 },
       model: { type: "selector" },
       modelFill: { default: "triangle", oneOf: ["triangle", "edge", "vertex"], parse: toLowerCase },
       direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
@@ -189,6 +191,7 @@
       this.trailCount = 0
       this.overTimeArrayLength = 0
       this.emitterTime = 0
+      this.delayTime = 0
       this.lifeTime = [1,1]
       this.trailLifeTime = [0,0] // if 0, then use this.lifeTime
 
@@ -212,6 +215,7 @@
       this.nextTime = 0
       this.numDisabled = 0
       this.numEnabled = 0
+      this.startDisabled = !this.data.enable // if we start disabled then the tick is disabled, until the component is enabled
       this.manageIDs = false
 
       this.params[ID_PARAM] = -1 // unmanaged IDs
@@ -350,9 +354,11 @@
         this.destinationWeight = this.updateVec4WRange(data.destinationWeight, [0], "destination")
       }
 
-      if (data.duration !== oldData.duration) {
+      if (data.duration !== oldData.duration || data.delay !== oldData.delay || data.emitterTime !== oldData.emitterTime) {
+        // restart the particles
         this.params[DURATION_PARAM] = data.duration
-        this.emitterTime = 0 // if the duration is changed then restart the particles
+        this.emitterTime = data.emitterTime
+        this.delayTime = data.delay
       }
 
       if (data.spawnType !== oldData.spawnType || data.spawnRate !== oldData.spawnRate || data.lifeTime !== oldData.lifeTime || data.trailInterval !== oldData.trailInterval) {
@@ -382,6 +388,10 @@
         this.enablePauseTick(data.enableInEditor)
       }
 
+      if (data.enable && this.startDisabled) {
+        this.startDisabled = false
+      }
+
       if (data.model !== oldData.model && data.model && "getObject3D" in data.model) {
         if (oldData.model) { oldData.model.removeEventListener("object3dset", this.handleObject3DSet) }
         this.updateModelMesh(data.model.getObject3D(MODEL_MESH))
@@ -408,7 +418,7 @@
 
       // for managedIDs the CPU defines the ID - and we want to avoid this if at all possible
       // once managed, always managed
-      this.manageIDs = this.manageIDs || !data.enable || data.source || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" || data.model
+      this.manageIDs = this.manageIDs || !data.enable || data.source || typeof this.el.getDOMAttribute(this.attrName).enable !== "undefined" || data.model || data.delay > 0
 
       // call loadTexture() after createMesh() to ensure that the material is available to accept the texture
       if (data.texture !== oldData.texture) {
@@ -418,10 +428,16 @@
 
     tick(time, deltaTime) {
       const data = this.data
+
+      if (this.startDisabled) { return }
+
+      if (deltaTime > 100) deltaTime = 100 // ignore long pauses
+      const dt = deltaTime/1000 // dt is in seconds
+
+      if (data.enable) { this.delayTime -= dt }
+      if (this.delayTime >= 0) { return }
+
       if (!data.model || this.modelVertices) {
-        if (deltaTime > 100) deltaTime = 100 // ignore long pauses
-        const dt = deltaTime/1000 // dt is in seconds
-  
         this.emitterTime += dt
         this.params[TIME_PARAM] = this.emitterTime
   
@@ -762,8 +778,18 @@
         const n = this.count
 
         let vertexIDs = new Float32Array(n)
-        for (let i = 0; i < n; i++) {
-          vertexIDs[i] = i
+        if (this.startDisabled || this.data.delay > 0 || this.data.model) {
+          vertexIDs.fill(-1)
+
+          this.numEnabled = 0
+          this.numDisabled = n  
+        } else {
+          for (let i = 0; i < n; i++) {
+            vertexIDs[i] = i
+          }
+
+          this.numEnabled = n
+          this.numDisabled = 0
         }
 
         this.geometry.addAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
@@ -784,9 +810,6 @@
             this.geometry.addGroup(i, m, 0)
           }
         }
-
-        this.numEnabled = n
-        this.numDisabled = 0
       }
     },
 

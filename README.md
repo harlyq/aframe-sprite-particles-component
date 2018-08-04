@@ -67,6 +67,10 @@ control how the particles' color blends with the colors behind the particle syst
 
 over-time ranges for the particle color. can use names e.g. `blue` or `color`, or hex strings e.g. `#ff0` or `#e7f890`
 
+**delay** : number = `0`
+
+delays the start of the emitter for this number of seconds. The delay only counts down if the emitter is enabled.
+
 **depthTest** : boolean = `true`
 
 if true, particles will not be drawn if another object has been drawn previously in front of the particle
@@ -74,7 +78,6 @@ if true, particles will not be drawn if another object has been drawn previously
 **depthWrite** : boolean = `false`
 
 if true, particle pixels will write their depth position to the depth buffer (obscuring objects that appear behind the particle, but were drawn after the particle system). if false, the particles do not affect the depth buffer, so objects drawn after the particle system, but located behind the particle system will be drawn on top
-
 
 **destination** : selector = null
 
@@ -107,6 +110,10 @@ if true, generate a bounding box called "mesh" which helps selecting and provide
 **emitterColor** : color = `white`
 
 overall color for the emitter. It is cheaper to set the emitter color than using *color* to color each particle, although the emitter color is a single color
+
+**emitterTime** : number = `0`
+
+set the time on the emitter, this can be used to pre-charge the emitter with particles.  This is a write-only value, it does not get updated over time
 
 **enable** : boolean = `true`
 
@@ -287,6 +294,8 @@ If the a-entity containing the particle system also contains some other geometry
 The shader for the particles is optimised to use only the code required for a given set of shader attributes, so it is no longer (as of v0.3.4) possible to add new attributes after creation (attributes can still be changed in the Inspector). However, there are no problems changing attributes that existed when the component was created (except for *overTimeSlots*).
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
+
+If not set as assets then models may take some time to load, and the particle system will only show once the model is loaded.  If a **delay** is set then the delay starts as soon as the component is enabled - even there is a model which is not yet loaded.
 
 The **velocityScale** is a very crude 3D approximation on a 2D camera facing billboard, so it may look odd when viewed extremely closely, or when the particle systems are very thin. The particle systems uses Points, which only have a single scale value so it applies equal in both x and y in screen space. VelocityScaling will only be active if either the **velocityScale** or **velocityScaleMinMax** attribute is defined in the component, and the **velocityScale** is greater than 0.
 
