@@ -12,12 +12,12 @@
         <img id="blob" src="assets/blob.png">
         <img id="raindash" src="assets/raindash.png">
         <img id="tree" src="assets/tree.png">
-        <img id="texturegrid1024" src="assets/texturegrid1024.jpg">
+        <img id="texturegrid1024" src="assets/numbered_8x8_1024x1024.jpg">
         <a-mixin id="label" text="align: center; width: 10" position="0 -1.5 0"></a-mixin>
       </a-assets>
       <a-entity position="0 0 -19">
         <a-entity position="0 0 0">
-          <a-entity sprite-particles="texture: url(assets/texturegrid1024.jpg); rotation: 0,360; textureFrame: 8 8; textureLoop: 2; spawnRate: 0.015625; lifeTime: 64; particleSize: 1000"></a-entity>
+          <a-entity sprite-particles="texture: url(assets/numbered_8x8_1024x1024.jpg); rotation: 0,360; textureFrame: 8 8; textureLoop: 2; spawnRate: 0.015625; lifeTime: 64; particleSize: 1000"></a-entity>
           <a-text value="rotating frames" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-4 0 0">
@@ -204,6 +204,18 @@
           <a-entity sprite-particles="texture: #blob; spawnType: burst; spawnRate: 50; acceleration: -1 2 0..1 2 0; source: #flyingbox2"></a-entity>
           <a-text value="source + burst" mixin="label"></a-text>
         </a-entity>
+        <a-entity position="16 12 0">
+          <a-entity id="toggle3" sprite-particles="texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5; enable: true"></a-entity>
+          <a-text value="trails + disable" mixin="label"></a-text>
+          <script>
+            let toggle3 = document.getElementById("toggle3")
+            let enableToggle3 = true
+            setInterval(() => {
+              enableToggle3 = !enableToggle3
+              toggle3.setAttribute("sprite-particles", {enable: enableToggle3})
+            }, 5500)
+          </script>
+        </a-entity>
         <a-entity position="16 8 0">
           <a-entity sprite-particles="texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5"></a-entity>
           <a-text value="trails" mixin="label"></a-text>
@@ -233,15 +245,15 @@
           <a-text value="trails + source" mixin="label"></a-text>
         </a-entity>
         <a-entity position="12 -8 0">
-          <a-entity position="0 -0.5 0" sprite-particles="texture: url(assets/texturegrid1024.jpg); textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
+          <a-entity position="0 -0.5 0" sprite-particles="texture: #texturegrid1024; textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
           <a-text value="trails + frames" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 -8 0">
-          <a-entity position="0 -0.5 0" sprite-particles="texture: url(assets/texturegrid1024.jpg); textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
+          <a-entity position="0 -0.5 0" sprite-particles="texture: #texturegrid1024; textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
           <a-text value="trails + frames" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-24 -8 0">
-          <a-entity position="0 -0.5 0" sprite-particles="texture: url(assets/texturegrid1024.jpg); textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailLifeTime: 9.5; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
+          <a-entity position="0 -0.5 0" sprite-particles="texture: #texturegrid1024; textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailLifeTime: 9.5; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
           <a-text value="long life trails" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-16 4 0">
@@ -344,7 +356,7 @@
           <a-text value="short ribbon" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-16 -12 0">
-          <a-entity sprite-particles="texture: assets/numbered_2x2_64x64.png; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; trailInterval: 0.2; trailType: ribbon; ribbonWidth: 20"></a-entity>
+          <a-entity sprite-particles="texture: assets/numbered_2x2_64x64.jpg; velocity: 0.5 0 0; position: -0.75 0 0; lifeTime: 4; spawnRate: .1; trailInterval: 0.2; trailType: ribbon; ribbonWidth: 20"></a-entity>
           <a-text value="textured ribbon" mixin="label"></a-text>
         </a-entity>
         <a-entity position="-20 -12 0">
