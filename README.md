@@ -135,6 +135,10 @@ if false then always render the particle system. This is useful for particles us
 
 range for maximum age of each particle
 
+**materialSide** : double | front | back = `front`
+
+define whether front, back or both (double) sides are visible. Useful for the `ribbon3d` trail type.
+
 **model** : selector = `null`
 
 the particles spawn in positions on the surface of the model
@@ -201,7 +205,7 @@ the `overtime` type will spread the texture over the whole trail, with the right
 
 **ribbonWidth** : number = `1`
 
-width of ribbon trails. 1 is the default, use smaller numbers for a thinner ribbon, and larger numbers for a thicker ribbon.
+width of ribbon trails. 1 is the default, use smaller numbers for a thinner ribbon, and larger numbers for a thicker ribbon.  For `ribbon3d`, a value of `1` represents a ribbon with a width of 1 m.
 
 **rotation** : number range array = `0`
 
@@ -255,9 +259,9 @@ generate trails after particles.  If active, the lead particle but will not chan
 
 range value determining the age of each trail.  If this value is 0, then the trail life time is equal to the **lifeTime** attribute.  Trails only appear if **timeInterval** is larger than 0
 
-**trailType** : particle | ribbon = `particle`
+**trailType** : particle | ribbon | ribbon3d = `particle`
 
-the type of trails to use, either particles or a ribbon mesh
+the type of trails to use, either particles or a ribbon mesh.  A `ribbon` is a camera facing 2d mesh which applies a near uniform thickness. The `ribbon3d` is thin 3d mesh which is tangential to the direction of travel of the particle
 
 **transparent** : boolean = `true`
 
@@ -311,7 +315,7 @@ Destinations can be used without a **destination** entity, whereby the **destina
 
 When using **source**, the particles positions are based off of the vector from the particle component's entities' position to the source position, so if the particle component's entity moves, then the whole particle system will move as well.  It is recommended that the particle component's entity does not move when using **source**.
 
-Ribbons provide a screen space line (can be textured) that follow a particle's path. Wide ribbons will appear twisted when they change direction quickly because the ribbon cannot fit in the space on the screen. They have a higher GPU cost than particles.
+`ribbon` provides a screen space line (can be textured) that follow a particle's path. Wide ribbons will appear twisted when they change direction quickly because the ribbon cannot fit in the space on the screen. `ribbon3d` is a three dimensional strip that follows a particle, so it may be very thin when viewed side-on, and will need **materialSide** = `double` to see both front and back sides. Both have a higher GPU cost than particles.
 
 For **ribbonShape** we can either pick one of the listed shapes, or we can define a glsl function for the shape by using an `=` as the first character.  The function has one parameter p, which is 0 for the beginning of the trail and 1 for the end of the trail.  For example:
 ```html

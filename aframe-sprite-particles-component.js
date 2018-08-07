@@ -116,6 +116,12 @@
     "multiply": THREE.MultiplyBlending,
   }
 
+  const SIDE_MAP = {
+    "double": THREE.DoubleSide,
+    "front": THREE.FrontSide,
+    "back": THREE.BackSide,
+  }
+
   AFRAME.registerComponent("sprite-particles", {
     schema: {
       enableInEditor: { default: false },
@@ -131,7 +137,7 @@
       randomizeFrames: { default: false },
       trailInterval: { default: 0 },
       trailLifeTime: { default: "0" },
-      trailType: { default: "particle", oneOf: ["particle", "ribbon"] },
+      trailType: { default: "particle", oneOf: ["particle", "ribbon", "ribbon3d"] },
       ribbonWidth: { default: 1, },
       ribbonShape: { default: "flat", oneOf: ["flat", "taperin", "taperout", "taper"], parse: toLowerCase },
       ribbonUVType: { default: "overtime", oneOf: UV_TYPE_STRINGS, parse: toLowerCase },
@@ -167,8 +173,9 @@
       direction: { default: "forward", oneOf: ["forward", "backward"], parse: toLowerCase },
       particleOrder: { default: "original", oneOf: PARTICLE_ORDER_STRINGS },
       ribbonUVMultiplier: { default: 1 },
+      materialSide: { default: "front", oneOf: ["double", "front", "back"], parse: toLowerCase },
       screenDepthOffset: { default: 0 },
-      alphaTest: { default: 0 }, 
+      alphaTest: { default: 0 },
       fog: { default: true },
       depthWrite: { default: false },
       depthTest: { default: true },
@@ -409,6 +416,10 @@
         this.updateDefines()
       }
 
+      if (data.materialSide !== oldData.materialSide) {
+        this.material.side = SIDE_MAP[data.materialSide]
+      }
+
       if (boundsDirty) {
         this.updateBounds() // call after createMesh()
       }
@@ -500,7 +511,7 @@
     },
 
     isRibbon() {
-      return this.data.trailInterval > 0 && this.data.trailType === "ribbon"
+      return this.data.trailInterval > 0 && this.data.trailType !== "particle"
     },
 
     createMesh() {
@@ -841,7 +852,11 @@
 
       if (data.trailInterval > 0) {
         if (this.isRibbon()) {
-          defines.USE_RIBBON_TRAILS = true
+          if (data.trailType === "ribbon") {
+            defines.USE_RIBBON_TRAILS = true
+          } else {
+            defines.USE_RIBBON_3D_TRAILS = true
+          }
         }
         else {
           defines.USE_PARTICLE_TRAILS = true
@@ -1388,7 +1403,7 @@ void main() {
   float particleLoopTime = particleCount / spawnRate;
   float motionAge = -1.; // used to determine the age for particle movement
 
-#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
+#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
   float maxAge = maxParticleLifeTime + maxTrailLifeTime;
 #else
   float maxAge = maxParticleLifeTime;
@@ -1404,7 +1419,7 @@ void main() {
   // for this frame, any vertex IDs after particleID0 are assumed to belong to the previous loop
 
   // vertex 0 = trail0 of particle0, vertex 1 = trail1 of particle0, ..., vertex k = trail0 of particle1, ...
-#if defined(USE_RIBBON_TRAILS)
+#if defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
   float rawParticleID = floor( vertexID / VERTS_PER_RIBBON / trailCount );
 #else
   float rawParticleID = floor( vertexID / trailCount );
@@ -1493,7 +1508,7 @@ void main() {
     }
   }
 
-#elif defined(USE_RIBBON_TRAILS)
+#elif defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
 
   // +1 to the trailID0 because the ribbon needs two elements to start
   // we cap the particleAge to ensure it never goes past the particleLifeTime
@@ -1518,12 +1533,12 @@ void main() {
     vOverTimeRatio = 1.0;
   }
 
-#else // defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
+#else // defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
 
   motionAge = particleAge;
   vOverTimeRatio = particleAge/particleLifeTime;
 
-#endif // defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
+#endif // defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
 
   // these checks were around large blocks of code above, but this caused instability
   // in some of the particle systems, so instead we do all of the work, then cancel 
@@ -1670,6 +1685,26 @@ void main() {
   // #include <morphtarget_vertex>
   // #include <project_vertex> replaced below
 
+#if defined(USE_RIBBON_3D_TRAILS)
+  float ribbonID = mod( vertexID, VERTS_PER_RIBBON );
+  
+  {
+    float nextT = motionAge + trailInterval;
+    float ribbonWidth = params[4].x * ribbonShape( vOverTimeRatio );
+
+    vec3 nextPosition = particleMotion( p, v, a, av, aa, axis, ov, oa, dest, min( 1., nextT/particleLifeTime )*destWeight, nextT );
+    vec3 dir = nextPosition - transformed;
+    float dirLen = length( dir );
+
+    vec3 normal = vec3( 0. );
+    if ( dirLen > EPSILON ) {
+      normal = normalize( cross( vec3( 0., 1., 0. ), dir ) );
+    }
+
+    transformed += ribbonWidth * normal * ( 0.5 - ribbonID );  // +normal for ribbonID 0, -normal for ribbonID 1
+  }
+#endif
+
   vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
   gl_Position = projectionMatrix * mvPosition;
 
@@ -1699,7 +1734,7 @@ void main() {
 #if defined(USE_PARTICLE_SCREEN_DEPTH_OFFSET)
   float screenDepthOffset = params[3].w;
 
-#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS)
+#if defined(USE_PARTICLE_TRAILS) || defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
   // multiply trailCount by 2 because trailID ranges from [-trailCount, trailCount]
   gl_Position.z -= (particleID*trailCount*2. + trailID - trailID0)*gl_Position.w*screenDepthOffset/vertexCount;
 #else
@@ -1719,7 +1754,7 @@ void main() {
   vFrame = floor( mod( vOverTimeRatio * textureCount * textureLoop, textureCount ) ) + .5;
 #endif
 
-#if !defined(USE_RIBBON_TRAILS)
+#if !defined(USE_RIBBON_TRAILS) && !defined(USE_RIBBON_3D_TRAILS)
   float particleSize = params[2].x;
 
   gl_PointSize = particleSize * particleScale * mix( 1., 1. / - mvPosition.z, usePerspective );
@@ -1730,7 +1765,7 @@ void main() {
   // #include <worldpos_vertex>
   #include <fog_vertex>
 
-#if defined(USE_RIBBON_TRAILS)
+#if defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
   float ribbonUVMultiplier = params[4].y;
   float ribbonUVType = params[4].z;
 
@@ -1799,7 +1834,7 @@ void main() {
 
 #ifdef USE_MAP
 
-#if defined(USE_RIBBON_TRAILS)
+#if defined(USE_RIBBON_TRAILS) || defined(USE_RIBBON_3D_TRAILS)
   vec2 uv = ( uvTransform * vec3( vUv, 1. ) ).xy;
 #else
   vec2 uv = ( uvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1. ) ).xy;
