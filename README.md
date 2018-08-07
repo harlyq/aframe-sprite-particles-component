@@ -279,7 +279,7 @@ this sets the mix and max scaling for all particles when **velocityScale** is ap
 
 ## Limitations
 
-To toggle **enable**, the attribute must appear in the component at creation time. It it is left out and then added at a later stage, the first transition from enabled to disabled will kill the wrong particles.
+To toggle **enable**, the attribute must appear in the component at creation time. It it is left out and then added at a later stage, the first transition from enabled to disabled will not disable the particles correctly.
 
 Both radial and non-radial values are applied to each particle. So a particle's position will be the sum of the **position** and **radialPosition**, similarly for velocity and acceleration.
 
@@ -295,7 +295,7 @@ The shader for the particles is optimised to use only the code required for a gi
 
 When using **model** the particles spawn at random points on the surface of the model. Each triangle is given even weighting, so on average a large triangle will have as many particles as a small triangle.
 
-If not set as assets then models may take some time to load, and the particle system will only show once the model is loaded.  If a **delay** is set then the delay starts as soon as the component is enabled - even there is a model which is not yet loaded.
+Rendering can start before models are loaded (if the model is not configured in a-assets), and the particle system will only show once the model is loaded.
 
 The **velocityScale** is a very crude 3D approximation on a 2D camera facing billboard, so it may look odd when viewed extremely closely, or when the particle systems are very thin. The particle systems uses Points, which only have a single scale value so it applies equal in both x and y in screen space. VelocityScaling will only be active if either the **velocityScale** or **velocityScaleMinMax** attribute is defined in the component, and the **velocityScale** is greater than 0.
 

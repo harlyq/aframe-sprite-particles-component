@@ -53,6 +53,7 @@
     destinationWeight: "USE_PARTICLE_DESTINATION",
     screenDepthOffset: "USE_PARTICLE_SCREEN_DEPTH_OFFSET",
     source: "USE_PARTICLE_SOURCE",
+    model: "USE_PARTICLE_SOURCE",
   }
 
   const UV_TYPE_STRINGS = ["overtime", "interval"]
@@ -443,6 +444,8 @@
   
         if (this.geometry && this.manageIDs) {
           this.updateWorldTransform(this.emitterTime)
+        } else {
+          this.params[ID_PARAM] = -1
         }
 
         if (data.destination && data.destination.object3D && (this.destinationWeight[0] > 0 || this.destinationWeight[1] > 0)) {
@@ -939,10 +942,11 @@
         const spawnRate = this.data.spawnRate
         const isBurst = data.spawnType === "burst"
         const spawnDelta = isBurst ? 0 : 1/spawnRate // for burst particles spawn everything at once
-        const changeIDs = data.enable ? this.numEnabled < n : this.numDisabled < n
-        const hasSource = data.source && data.source.object3D
+        const isEnableDisable = data.enable ? this.numEnabled < n : this.numDisabled < n
+        const hasSource = data.source && data.source.object3D != null
         const isUsingModel = this.modelVertices && this.modelVertices.length
         const isRibbon = this.isRibbon()
+        const isIDUnique = isUsingModel || hasSource
 
         let particleVertexID = this.geometry.getAttribute("vertexID")
         let particlePosition = this.geometry.getAttribute("position")
@@ -959,9 +963,10 @@
           this.geometry.boundingSphere.center.copy(position)
         }
 
-        let startID = this.nextID
+        let startIndex = this.nextID % n
         let numSpawned = 0 // number of particles and/or trails
-        let id = startID
+        let index = startIndex
+        let id = this.nextID
 
         modelFillFn = randomPointInTriangle
         switch (data.modelFill) {
@@ -984,28 +989,34 @@
           for (let particleVert = 0, particleVertCount = isRibbon ? VERTS_PER_RIBBON : 1; particleVert < particleVertCount; particleVert++ ) {
             for (let trail = 0; trail < this.trailCount; trail++) {
               id = this.nextID
-  
+
               if (isUsingModel) {
-                particlePosition.setXYZ(id, modelPosition.x, modelPosition.y, modelPosition.z)
+                particlePosition.setXYZ(index, modelPosition.x, modelPosition.y, modelPosition.z)
               }
     
               if (hasSource) {
-                particlePosition.setXYZ(id, position.x, position.y, position.z)
-                particleQuaternion.setXYZW(id, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
+                particlePosition.setXYZ(index, position.x, position.y, position.z)
+                particleQuaternion.setXYZW(index, quaternion.x, quaternion.y, quaternion.z, quaternion.w)
               }
     
-              if (changeIDs) {
-                particleVertexID.setX(id, data.enable ? id : -1)
+              particleVertexID.setX(index, data.enable ? id : -1) // id is unique and is tied to position and quaternion
     
+              if (isEnableDisable) {
                 // if we're enabled then increase the number of enabled and reset the number disabled, once we 
-                // reach this.numEnabled === n, all IDs would have been set and changeIDs will switch to false.
+                // reach this.numEnabled === n, all IDs would have been set and isEnableDisable will switch to false.
                 // vice versa if we are disabled. these numbers represent the number of consecutive enables or disables.
                 this.numEnabled = data.enable ? this.numEnabled + 1 : 0
                 this.numDisabled = data.enable ? 0 : this.numDisabled + 1
               }  
-  
-              this.nextID = (this.nextID + 1) % this.count // wrap around to 0 if we'd emitted the last particle in our stack
+
+              index = (index + 1) % n
               numSpawned++
+
+              if (isIDUnique) {
+                this.nextID++
+              } else {
+                this.nextID = index // wrap around to 0 if we'd emitted the last particle in our stack
+              }
             }
           }
 
@@ -1024,28 +1035,31 @@
           }
 
           // if the buffer was wrapped, we cannot send just the end and beginning of a buffer, so submit everything
-          if (this.nextID < startID) {
-            startID = 0
+          if (index < startIndex) {
+            startIndex = 0
             numSpawned = this.count
           }
 
           if (hasSource || isUsingModel) {
-            particlePosition.updateRange.offset = startID
+            particlePosition.updateRange.offset = startIndex
             particlePosition.updateRange.count = numSpawned
             particlePosition.needsUpdate = true
           }
 
           if (hasSource) {
-            particleQuaternion.updateRange.offset = startID
+            particleQuaternion.updateRange.offset = startIndex
             particleQuaternion.updateRange.count = numSpawned
             particleQuaternion.needsUpdate = true
           }
 
-          if (changeIDs) {
-            particleVertexID.updateRange.offset = startID
+          // if (changeIDs) {
+            particleVertexID.updateRange.offset = startIndex
             particleVertexID.updateRange.count = numSpawned
             particleVertexID.needsUpdate = true
-          }
+          // }
+
+          // this will cause a glitch in the appearance as we reset the IDs to prevent them from overflowing
+          this.nextID = this.nextID % RANDOM_REPEAT_COUNT
         }
       }
     })(),
@@ -1381,7 +1395,7 @@ void main() {
 #endif
 
   // the CPU manages IDs if it sets the position or disables particles, otherwise cpuID is -1
-  float particleID0 = cpuID > 0. ? cpuID : floor( mod( time, particleLoopTime ) * spawnRate ); // this will lose precision eventually
+  float particleID0 = cpuID > -EPSILON ? cpuID : floor( mod( time, particleLoopTime ) * spawnRate ); // this will lose precision eventually
 
   vOverTimeRatio = -1.; // the vOverTimeRatio will be used for the lerps on over-time attributes
 
@@ -1396,6 +1410,17 @@ void main() {
   float rawParticleID = floor( vertexID / trailCount );
 #endif
 
+//   float seed = pseudoRandom( rawParticleID * baseSeed * 110. );
+//   float particleStartTime = rawParticleID / spawnRate * spawnType;
+//   float particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
+
+  float particleLoop = floor( time / particleLoopTime );
+
+#if defined(USE_PARTICLE_SOURCE)
+  // find particleID relative to the last loop
+  float particleID = rawParticleID - floor( particleID0 / particleCount ) * particleCount;
+#else // defined(USE_PARTICLE_SOURCE)
+
 #if PARTICLE_ORDER == 0
   float particleID = particleID0 - (particleCount - 1. - rawParticleID); // newest last
 #elif PARTICLE_ORDER == 1
@@ -1404,10 +1429,11 @@ void main() {
   float particleID = rawParticleID > particleID0 ? rawParticleID - particleCount : rawParticleID; // cyclic (original)
 #endif
 
+#endif // defined(USE_PARTICLE_SOURCE)
+
   // for burst mode we use the rawParticleID, because the concept of particleID0 is irrelevant
   particleID = mix( rawParticleID, particleID, spawnType ); 
 
-  float particleLoop = floor( time / particleLoopTime );
   float particleStartTime = particleLoop * particleLoopTime + particleID / spawnRate * spawnType;
 
   // we use the id as a seed for the randomizer, but because the IDs are fixed in 
@@ -1430,6 +1456,8 @@ void main() {
     particleAge = -1.;
   } 
 
+  // always calculate the trailLifeTime, even if we don't use it, so the particles
+  // with the same seed give consistent results
   float trailLifeTime = randFloatRange( angularAcceleration[0].w, angularAcceleration[1].w, seed );
 
 #if defined(USE_PARTICLE_TRAILS)

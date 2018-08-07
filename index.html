@@ -235,14 +235,14 @@
           </a-entity>
           <a-entity sprite-particles="source: #trails; texture: #blob; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5"></a-entity>
           <a-text value="trails + source" mixin="label"></a-text>
-        </a-entity>      
+        </a-entity>
         <a-entity position="16 -8 0">
           <a-entity id="trails2" position="0 -0.5 0" animation__1="property: position; dur: 5000; to: 1 0 0; loop: -1; easing: linear; dir: alternate" 
               animation__2="property: rotation; dur: 4000; to: 0 0 360; loop: -1; easing: linear;">
             <a-cone scale="0.2 0.2 0.2"></a-cone>
           </a-entity>
           <a-entity sprite-particles="source: #trails2; texture: #blob; spawnType: burst; spawnRate: 1; lifeTime: 3; trailLifeTime: 1; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; trailInterval: 0.1; opacity: 1,0; color: red,green; scale: 1,0.5;"></a-entity>
-          <a-text value="trails + source" mixin="label"></a-text>
+          <a-text value="trails + source + burst" mixin="label"></a-text>
         </a-entity>
         <a-entity position="12 -8 0">
           <a-entity position="0 -0.5 0" sprite-particles="texture: #texturegrid1024; textureFrame: 8 8; spawnType: burst; spawnRate: 0.1; lifeTime: 4; trailInterval: 1; velocity: -0.15 0.5 0.1..0.15 0.5 0.1; acceleration: -0.5 0 0..0.5 0 0; opacity: 1,0.5; rotation: 0,360; scale: 3,4"></a-entity>
