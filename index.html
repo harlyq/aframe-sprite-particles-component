@@ -316,7 +316,7 @@
         <a-entity position="0 12 0">
           <a-entity sprite-particles="texture: #blob; position: -0.5 0 -0.1..0.5 0 0.1; spawnType: burst; spawnRate: 2; lifeTime: 2; depthWrite: true; particleSize: 1000; seed: 0.1"></a-entity>
           <a-box position="0 0 -1" material="color:brown; transparent: true;"></a-box>
-          <a-text value="depthWrite fail" mixin="label"></a-text>
+          <a-text value="+ depthWrite fail" mixin="label"></a-text>
         </a-entity>
         <a-entity position="4 12 0">
           <a-entity sprite-particles="texture: #blob; position: -0.5 0 -0.1..0.5 0 0.1; spawnType: burst; spawnRate: 2; lifeTime: 2; depthWrite: true; particleSize: 1000; alphaTest: 0.5; seed: 0.1"></a-entity>
@@ -370,6 +370,10 @@
         <a-entity position="-24 -12 0">
           <a-entity sprite-particles="texture: assets/frame.png; velocity: -0.5 1 0..0.5 1 0; acceleration: 0 -0.5 0; lifeTime: 4..6; color: yellow, red; spawnRate: 1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon3D; materialSide: double; ribbonWidth: 0.1"></a-entity>
           <a-text value="ribbon3D interval" mixin="label"></a-text>
+        </a-entity>
+        <a-entity position="-28 -12 0">
+          <a-entity sprite-particles="texture: assets/frame.png; position: -0.75 0 0; velocity: 0.5 0 0; lifeTime: 4; color: yellow, red; spawnRate: 0.1; ribbonUVType: interval; trailInterval: 0.1; trailType: ribbon3D; materialSide: double; rotation: 0,360"></a-entity>
+          <a-text value="ribbon3D rotation" mixin="label"></a-text>
         </a-entity>
         <a-entity position="16 -12 0">
           <a-entity sprite-particles="seed: 0.5; radialType: sphere; radialPosition: 1; orbitalVelocity: 200; lifeTime: 4..6; spawnRate: 0.5; texture: assets/blob.png; color: yellow, white; opacity: 1,0; particleSize: 200"></a-entity>

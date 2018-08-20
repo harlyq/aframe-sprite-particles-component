@@ -44,7 +44,6 @@
     radialAcceleration: "USE_PARTICLE_RADIAL_ACCELERATION",
     radialPosition: "USE_PARTICLE_RADIAL_OFFSET",
     radialVelocity: "USE_PARTICLE_RADIAL_VELOCITY",
-    rotation: "USE_PARTICLE_ROTATION",
     scale: "USE_PARTICLE_SCALE",
     velocity: "USE_PARTICLE_VELOCITY",
     orbitalVelocity: "USE_PARTICLE_ORBITAL",
@@ -867,6 +866,14 @@
         defines.USE_PARTICLE_RANDOMIZE_FRAMES = true
       }
 
+      if (domAttrs.includes("rotation")) {
+        if (this.isRibbon()) {
+          defines.USE_RIBBON_ROTATION = true
+        } else {
+          defines.USE_PARTICLE_ROTATION = true
+        }
+      }
+
       let ribbonShapeFunction = "1."
       if (data.ribbonShape === "taperout") {
         ribbonShapeFunction = "1. - p"
@@ -1274,7 +1281,7 @@ vec2 calcRotationScaleOverTime( const float r, const float seed )
   float rotation = 0.;
   float scale = 1.;
 
-#if defined(USE_PARTICLE_ROTATION)
+#if defined(USE_PARTICLE_ROTATION) || defined(USE_RIBBON_ROTATION)
   int rotationN = int( rotationScaleOverTime[0].x );
   if ( rotationN == 1 )
   {
@@ -1424,10 +1431,6 @@ void main() {
 #else
   float rawParticleID = floor( vertexID / trailCount );
 #endif
-
-//   float seed = pseudoRandom( rawParticleID * baseSeed * 110. );
-//   float particleStartTime = rawParticleID / spawnRate * spawnType;
-//   float particleLifeTime = randFloatRange( angularVelocity[0].w, angularVelocity[1].w, seed );
 
   float particleLoop = floor( time / particleLoopTime );
 
@@ -1696,9 +1699,10 @@ void main() {
     vec3 dir = nextPosition - transformed;
     float dirLen = length( dir );
 
-    vec3 normal = vec3( 0. );
-    if ( dirLen > EPSILON ) {
-      normal = normalize( cross( vec3( 0., 1., 0. ), dir ) );
+    vec3 normal = dir;
+    vec3 up = vec3( 0., c, -s ); // rotation in YZ
+    if ( dirLen > EPSILON && abs( dot( dir, up ) ) < dirLen * 0.99 ) {
+      normal = normalize( cross( up, dir ) );
     }
 
     transformed += ribbonWidth * normal * ( 0.5 - ribbonID );  // +normal for ribbonID 0, -normal for ribbonID 1

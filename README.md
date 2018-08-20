@@ -209,7 +209,7 @@ width of ribbon trails. 1 is the default, use smaller numbers for a thinner ribb
 
 **rotation** : number range array = `0`
 
-over-time ranges for the particle rotation counterclockwise about the XY plane. all rotations are from min range to max range, and in degrees
+for particles, over-time ranges for the rotation counterclockwise about the XY plane. For `ribbon3d`, it is the over-time counterclockwise rotation in the plane YZ. all rotations are from min range to max range, and in degrees
 
 **scale** : number range array = `1`
 
