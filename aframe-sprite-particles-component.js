@@ -23,11 +23,12 @@
   const RIBBON_UV_MULTIPLIER_PARAM = 17 // [4].y
   const RIBBON_UV_TYPE_PARAM = 18 // [4].z
   const RADIAL_Y_PARAM = 19 // [4].w
+  const PARAMS_LENGTH = 5 // 0..4
 
   const MODEL_MESH = "mesh"
   const VERTS_PER_RIBBON = 2
 
-  const RANDOM_REPEAT_COUNT = 131072; // random numbers will start repeating after this number of particles
+  const RANDOM_REPEAT_COUNT = 131072 // random numbers will start repeating after this number of particles
 
   const degToRad = THREE.Math.degToRad
 
@@ -255,9 +256,9 @@
       this.params[USE_PERSPECTIVE_PARAM] = data.usePerspective ? 1 : 0
       this.params[DIRECTION_PARAM] = data.direction === "forward" ? 0 : 1
       this.params[DRAG_PARAM] = THREE.Math.clamp(data.drag, 0, 1)
-      this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5;
-      this.params[RIBBON_WIDTH_PARAM] = data.ribbonWidth;
-      this.params[RIBBON_UV_MULTIPLIER_PARAM] = data.ribbonUVMultiplier;
+      this.params[SCREEN_DEPTH_OFFSET_PARAM] = data.screenDepthOffset*1e-5
+      this.params[RIBBON_WIDTH_PARAM] = data.ribbonWidth
+      this.params[RIBBON_UV_MULTIPLIER_PARAM] = data.ribbonUVMultiplier
 
       this.textureFrames[0] = data.textureFrame.x
       this.textureFrames[1] = data.textureFrame.y
@@ -282,7 +283,7 @@
       }
 
       if (data.ribbonUVType !== oldData.ribbonUVType) {
-        this.params[RIBBON_UV_TYPE_PARAM] = UV_TYPE_STRINGS.indexOf(data.ribbonUVType) === -1 ? 0 : UV_TYPE_STRINGS.indexOf(data.ribbonUVType);
+        this.params[RIBBON_UV_TYPE_PARAM] = UV_TYPE_STRINGS.indexOf(data.ribbonUVType) === -1 ? 0 : UV_TYPE_STRINGS.indexOf(data.ribbonUVType)
       }
 
       if (data.radialType !== oldData.radialType) {
@@ -837,6 +838,7 @@
       const domDefines = domAttrs.map(a => ATTR_TO_DEFINES[a]).filter(b => b)
 
       let defines = {
+        PARAMS_LENGTH,
         OVER_TIME_ARRAY_LENGTH: this.overTimeArrayLength,
         RANDOM_REPEAT_COUNT,
         USE_MAP: true,
@@ -1162,7 +1164,7 @@ attribute float vertexID;
 attribute vec4 quaternion;
 #endif
 
-uniform vec4 params[5];
+uniform vec4 params[PARAMS_LENGTH];
 uniform vec4 offset[2];
 uniform vec4 velocity[2];
 uniform vec4 acceleration[2];
