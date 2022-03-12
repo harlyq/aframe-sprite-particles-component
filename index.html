@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <script src="https://aframe.io/releases/0.9.0/aframe.js"></script>
+    <script src="https://aframe.io/releases/1.3.0/aframe.js"></script>
     <script src="aframe-sprite-particles-component.js"></script>
   </head>
   <body>
@@ -15,14 +15,17 @@
         <a-mixin id="label" text="align: center; width: 10" position="0 -1.5 0"></a-mixin>
       </a-assets>
       <a-entity position="0 0 -19">
+        <!--
         <a-entity position="0 0 0">
           <a-entity sprite-particles="texture: url(assets/numbered_8x8_1024x1024.jpg); rotation: 0,360; textureFrame: 8 8; textureLoop: 2; spawnRate: 0.015625; lifeTime: 64; particleSize: 1000"></a-entity>
           <a-text value="rotating frames" mixin="label"></a-text>
         </a-entity>
+      -->
         <a-entity position="-4 0 0">
-          <a-entity sprite-particles="texture: #blob; spawnRate: 50; color: blue; velocity: -1 8 -1..1 8 1; acceleration: 0 -20 0"></a-entity>
+          <a-entity sprite-particles="texture: url(assets/blob.png); spawnRate: 50; alphaTest: 0.5; color: blue; velocity: -1 8 -1..1 8 1; acceleration: 0 -20 0"></a-entity>
           <a-text value="fountain" mixin="label"></a-text>
         </a-entity>
+        
         <a-entity position="-8 0 0">
           <a-entity sprite-particles="texture: #blob; color: violet; radialType: sphere; radialPosition: -0.5..0.5; spawnRate: 40; lifeTime: .1; scale: 5"></a-entity>
           <a-text value="flutter" mixin="label"></a-text>
@@ -396,6 +399,9 @@
           <a-text value="emitterTime 5s" mixin="label"></a-text>
         </a-entity>
       </a-entity>
+
+    
+
       <!--a-entity position="0 0 -4">
         <a-entity position="0 0 0">
           <a-entity sprite-particles="texture: assets/frame.png; ribbonUVType: interval; texture2: assets/numbered_4x4_256x256.png; velocity: -0.5 1 -0.5..0.5 1 0.5; materialSide: double; acceleration: 0 -0.5 0; ribbonWidth: 0.5; ribbonShape2: taperout; lifeTime: 7; spawnRate: 1; trailInterval: 0.1; trailType: ribbon3d; ribbonUVMultiplier2: 2; trailLifeTime2: 1; color: red,blue; opacity2: 1,0; usePerspective2: false"></a-entity>
