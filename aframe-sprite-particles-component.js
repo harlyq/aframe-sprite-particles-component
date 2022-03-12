@@ -105,7 +105,7 @@
 
   // console.assert(AFRAME.utils.deepEqual(parseColorRangeArray("black..red,blue,,#ff0..#00ffaa").map(a => a.getHexString()), ["000000","ff0000","0000ff","0000ff","ffffff","ffffff","ffff00","00ffaa"]))
 
-  let WHITE_TEXTURE = new THREE.DataTexture(new Uint8Array(3).fill(255), 1, 1, THREE.RGBFormat)
+  let WHITE_TEXTURE = new THREE.DataTexture(new Uint8Array(4).fill(255), 1, 1, THREE.RGBAFormat)
   WHITE_TEXTURE.needsUpdate = true
 
   const BLENDING_MAP = {
@@ -563,7 +563,7 @@
         // // this.material.side = THREE.DoubleSide
         // this.material.side = THREE.FrontSide
         this.mesh = new THREE.Mesh(this.geometry, [this.material]) // geometry groups need an array of materials
-        this.mesh.drawMode = THREE.TriangleStripDrawMode
+        // this.mesh.drawMode = THREE.TriangleStripDrawMode
       } else {
         this.mesh = new THREE.Points(this.geometry, this.material)
       }
@@ -806,11 +806,11 @@
           this.numDisabled = 0
         }
 
-        this.geometry.addAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
-        this.geometry.addAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3).fill(0), 3))
+        this.geometry.setAttribute("vertexID", new THREE.Float32BufferAttribute(vertexIDs, 1)) // gl_VertexID is not supported, so make our own id
+        this.geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n*3).fill(0), 3))
 
         if (this.data.source) {
-          this.geometry.addAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4).fill(0), 4))
+          this.geometry.setAttribute("quaternion", new THREE.Float32BufferAttribute(new Float32Array(n*4).fill(0), 4))
         }
 
         // the ribbons are presented as triangle strips, so each vert pairs with it's two previous verts to
@@ -981,7 +981,7 @@
           data.source.object3D.updateMatrixWorld()
 
           // get source matrix in our local space
-          m4.getInverse(this.el.object3D.matrixWorld)
+          m4.copy( this.el.object3D.matrixWorld ).invert();
           m4.multiply(data.source.object3D.matrixWorld)
           m4.decompose(position, quaternion, scale)
           this.geometry.boundingSphere.center.copy(position)
@@ -1847,10 +1847,13 @@ void main() {
 #endif
 
   vec4 mapTexel = texture2D( map, uv );
-  diffuseColor *= mapTexelToLinear( mapTexel );
+  // diffuseColor *= mapTexelToLinear( mapTexel );
+  diffuseColor *= mapTexel;
 #endif // USE_MAP
 
-  #include <alphatest_fragment>
+  #ifdef USE_ALPHATEST
+    if ( diffuseColor.a < 0.1 ) discard;
+  #endif
 
   diffuseColor *= vParticleColor;
   outgoingLight = diffuseColor.rgb;
